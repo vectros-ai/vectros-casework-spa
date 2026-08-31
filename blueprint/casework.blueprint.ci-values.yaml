@@ -1,0 +1,15 @@
+# casework.blueprint.ci-values.yaml — CI-safe placeholder values for
+# casework.blueprint.yaml's required `inputs:` (companyName/auth0Domain/
+# auth0Audience). A blueprint validator that checks structure only (never
+# talks to a live tenant) discovers this file by its naming convention —
+# same basename as the blueprint, `.blueprint.yaml` swapped for
+# `.blueprint.ci-values.yaml` — and passes it via `vectros blueprint
+# validate --values`. Useful for your own fork too if you edit the
+# blueprint and want to validate the result without live Auth0 credentials.
+#
+# Placeholders only — structural + scope-gate + lint validation doesn't talk
+# to a live Auth0 tenant, so these values only need to satisfy the declared
+# `type`/`required` shape, not resolve to anything real.
+companyName: CI
+auth0Domain: ci-placeholder.us.auth0.com
+auth0Audience: ci-placeholder

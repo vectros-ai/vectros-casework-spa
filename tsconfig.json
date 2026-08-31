@@ -1,0 +1,49 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": false,
+
+    "baseUrl": ".",
+    "paths": {
+      // Pre-publish, monorepo-local dev consumes @vectros-ai/react as its
+      // BUILT bundle (matches what Vite's alias in vite.config.ts resolves
+      // at runtime) — avoids a dual-@types/react clash that deep-checking
+      // the aliased source would cause. Run `npm run build -w @vectros-ai/react`
+      // after changing the lib. Both this and the vite.config.ts alias are
+      // removed at the public-release cut, once @vectros-ai/react is
+      // consumed from the npm registry like any other dependency.
+      // Pin react/react-dom types to THIS app's single @types copy — the
+      // flat lib .d.ts still imports `react` types, which tsc would
+      // otherwise resolve from the repo root as a second @types/react
+      // identity (see ui/app-vectros-ai/tsconfig.json for the incident that
+      // motivated pinning this preventatively).
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    },
+
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,10 @@
+# Prettier formatting of markdown tables produces wide-aligned cells that are
+# unreadable in source. The rendered output is fine either way — so we let
+# authors hand-format markdown and only run prettier on code.
+*.md
+
+# Build + lockfile + generated artifacts.
+dist/
+build/
+coverage/
+package-lock.json

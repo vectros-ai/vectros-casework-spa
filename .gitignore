@@ -1,0 +1,53 @@
+# Build output
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Test + coverage
+coverage/
+*.lcov
+
+# Local env — NEVER commit real values. Use .env.example as the template.
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite cache
+.vite/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local self-signed dev cert (generated, gitignored — see vite.config.ts)
+.cert/
+
+# Vercel CLI project link (org id + project id) — local/CI-machine-specific,
+# never committed. CI's own vercel deploy step uses VERCEL_ORG_ID/
+# VERCEL_PROJECT_ID env vars directly, not this file.
+.vercel/
+.vercel
+
+# Catch-all for any other real dotenv variant Vercel's CLI may write locally
+# (.env.production, .env.preview, ...) beyond the specific names above.
+# MUST NOT swallow .env.example — bare `.env*` with no negation did exactly
+# that (found on #1110/!1633's PM cold-pass: it's a no-slash pattern, so it
+# matches at ANY depth, and silently dropped BOTH this app's own
+# .env.example AND e2e/.env.example from every real `git add -A` in the
+# public-mirror push path — invisible to the MR dry-run, which just `find`s
+# a plain non-git scratch dir and never consults gitignore at all).
+.env.*
+!.env.example
+!e2e/.env.example

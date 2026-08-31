@@ -1,0 +1,718 @@
+# Casework SPA blueprint — HR case management
+#
+# Provisions everything the app needs before a single user signs in: the app context, the
+# identity namespaces cases live under, the record/document schemas, the service principal's
+# own minimal profile, the two roles real users get assigned, and the trusted Auth0 issuer for
+# the token-exchange sign-in flow. Applied once, by whoever is standing up a deployment, via
+# `vectros blueprint apply` (or `vectros bootstrap`, which also mints the service principal's
+# key) — this file is the deliverable, not a description of one.
+#
+# What this blueprint deliberately does NOT do: create any organizations, cases, or users —
+# including the first admin. This is a Shape 1, Captive Enterprise deployment (no self-signup at
+# all): whoever stands up this blueprint sends the first `hr-admin` invite themselves, out-of-band,
+# with a root API key (the README documents the exact command). That first `hr-admin` then
+# creates the org entity themselves once signed in, through the app itself — not seeded here —
+# using the same `entities:cud:org` grant every `hr-admin` holds, invited or not.
+
+name: casework-hr-case-management
+version: "1.3.2"
+description: >
+  HR case management flagship — employer org -> employee case -> case entries + documents.
+  Demonstrates BYO-IdP token exchange (Auth0), per-organization ownership compartments,
+  per-principal isolation, hybrid search and RAG, with zero application backend.
+contextId: casework
+contextName: HR Case Management
+# companyName is the DEPLOYER's own organization name (e.g. "Acme Corp"), distinct from
+# contextName above (this blueprint's own fixed app identity, the same for every deployer).
+# Templated from the companyName input below — used for branding on invite emails.
+companyName: "${{ inputs.companyName }}"
+
+servicePrincipal:
+  externalId: casework-service-principal
+  displayName: Casework SPA service principal
+
+inputs:
+  companyName:
+    type: string
+    required: true
+    description: "Your organization's display name — used in invite email 'from' text."
+  auth0Domain:
+    type: string
+    required: true
+    description: "Your Auth0 tenant domain, e.g. 'acme-corp.us.auth0.com' (no scheme, no trailing slash)."
+  auth0Audience:
+    type: string
+    required: true
+    description: >
+      The API identifier (audience) for this Auth0 application. Must be distinct per
+      environment if you register more than one issuer against the same Auth0 account — the
+      platform requires the (issuer, audience) pair to be globally unique.
+
+# The trusted Auth0 issuer this deployment's sign-in flow exchanges tokens against.
+#
+# Deliberately NO `selfSignupPolicies` — Shape 1, Captive Enterprise has no self-signup at all:
+# the entity deploying this blueprint IS the org, so there is no "arbitrary anonymous
+# signer-upper" to design a floor role for. A first-time sign-in with no outstanding invite is
+# correctly rejected — every identity, including the first admin, must already have a PENDING
+# invite bound to this issuer before the token exchange will bind them. The first `hr-admin` is
+# invited out-of-band by whoever deploys this blueprint, using a root API key against
+# `POST /v1/users/invite` (root bypasses the ordinary subset-of-caller-authority check — see the
+# README for the exact command); every subsequent invite goes through the app's own Team screen,
+# gated by `hr-admin`'s member-lifecycle capability below. **There is exactly ONE onboarding
+# mechanism in this app** — the only thing that differs for person #1 is which credential sends the
+# invite, never a different code path.
+issuers:
+  - issuerId: primary
+    issuer: "https://${{ inputs.auth0Domain }}/"
+    jwksUri: "https://${{ inputs.auth0Domain }}/.well-known/jwks.json"
+    audience: "${{ inputs.auth0Audience }}"
+    contextId: casework
+    # Standard Auth0 userinfo path — always at this exact URL for any Auth0 tenant, so this
+    # is a derived value, not a new input. Lets the platform fall back to fetching `email`
+    # from the userinfo endpoint when the presented access token doesn't carry it directly
+    # (see AUTH0-SETUP.md's note on why the access token, not the ID token, is what gets
+    # presented), so no Auth0 Action / post-login hook is required for a standard tenant.
+    userinfoUri: "https://${{ inputs.auth0Domain }}/userinfo"
+
+# `org` and `client` are the two identity namespaces this app's data model is organized around:
+# an org is the employer, a client is an individual case compartment underneath it. Both must be
+# registered explicitly, like any namespace on this platform.
+#
+# Registered here as CONTEXT-OWNED (not tenant-wide) on purpose: this blueprint only ever
+# provisions the one `casework` context, so there's no other context these namespaces need to be
+# visible to, and context-owned registration is what lets the `org_profile` schema below (entity-
+# surfaced, bound to the `org` namespace) be writable by an ordinary scoped credential rather than
+# requiring elevated platform access. A tenant-wide registration would cost more and buy nothing
+# here.
+#
+# The two ranks are arbitrary but must be unique in-account; `org` ranked ahead of `client` simply
+# preserves the more-specific-namespace-wins convention a reader would otherwise expect — nothing
+# platform-side reserves these particular values for `org`/`client` specifically, so pick any
+# unique pair when forking with a different namespace shape.
+#
+# Membership wiring: both namespaces back a `${{ member.scope.<ns> }}` grant —
+# `org_membership`/`client_membership` name the record type + payload field the platform's
+# membership resolver reads (`membershipTargetField`, matched against the caller's own userId —
+# NOT the record's ownership stamp), and `membershipLevelField`/`membershipLevels` name the field
+# + closed vocabulary a `${{ member.scope.<ns>:<level> }}` selector narrows to. Declaring this
+# grants nobody anything by itself — see the `org_membership`/`client_membership` schemas below
+# for who can write these rows.
+namespaces:
+  - namespace: org
+    entityBacked: true
+    specificityRank: 1000
+    membershipRecordType: org_membership
+    membershipTargetField: targetUserId
+    membershipLevelField: level
+    membershipLevels: [admin, member]
+  - namespace: client
+    entityBacked: true
+    specificityRank: 2000
+    membershipRecordType: client_membership
+    membershipTargetField: targetUserId
+    membershipLevelField: level
+    membershipLevels: [admin, member]
+
+# A blueprint-authoring-time convenience (`@vectros-ai/blueprints` 0.15.0+ — an older CLI/
+# blueprints package rejects `dataScopeRef` with a validation error): `orgReach` names the one
+# dataScope shape `case-handler` below repeats verbatim across several read-only clauses. It's
+# resolved to a literal `dataScope` before this file ever reaches the platform (a byte-identical
+# wire payload either way) — purely for readability here, worth reaching for whenever the same
+# scope shape shows up more than once
+# in your own fork.
+fragments:
+  orgReach:
+    scope:org: ['${{ member.scope.org }}']
+
+schemas:
+  # One row per case compartment — carries the status/assignment metadata a real list/queue view
+  # needs, not just an entity with a pile of notes attached.
+  - typeName: case
+    displayName: Case
+    description: >
+      One employee case (grievance / accommodation / onboarding / investigation / leave request) —
+      status, type and assignment. Scoped to [org:<id>, client:<id>] — client:<id> is this case's
+      OWNERSHIP compartment (permissions are client-by-client, not case-by-case: a client can have
+      more than one case, and every case for that client shares the same scope). `folderId` below is
+      what actually identifies THIS case as distinct from a sibling case for the same client — a
+      scope tag was never meant to double as a per-case identifier.
+    indexMode: HYBRID
+    allowedSurfaces: [record]
+    fields:
+      - fieldId: caseType
+        fieldType: enum
+        required: true
+        enumValues: [grievance, accommodation, onboarding, investigation, leave_request]
+        renderHints: { label: "Case type", widget: select }
+      - fieldId: status
+        fieldType: enum
+        required: true
+        enumValues: [open, active, closed]
+        renderHints: { label: Status, widget: select }
+      - fieldId: assignedTo
+        fieldType: string
+        required: false
+        description: "userId of the case handler this case is assigned to (blank = unassigned)."
+      - fieldId: openedAt
+        fieldType: date
+        required: true
+      - fieldId: closedAt
+        fieldType: date
+        required: false
+      - fieldId: folderId
+        fieldType: string
+        required: false
+        description: >
+          The Vectros folder id createCase() creates alongside this case, for document upload. Not a
+          lookup field — folders themselves can't bind a schema (allowedSurfaces has no `folder`
+          option), so there's no way to query "the folder whose caseId is X" the way case_note/
+          case_document can; storing the id here, on the one record a case's own detail screen always
+          has loaded already, is the workaround. Blank on a case that predates this field.
+    lookupFields:
+      # One composite index serves both the plain "status=X" case-list filter and the
+      # "status=X AND assignedTo=Y" queue view ("my open cases", or a named handler's queue for an
+      # admin) — a leftmost-prefix match means a single declaration covers both. The org a case
+      # belongs to is an ownership dimension enforced by the platform on every read, not a
+      # payload field, so it never needs its own lookup leg here.
+      - { fieldNames: [status, assignedTo], sortBy: openedAt }
+
+  # A confidential, timestamped entry against a case — the caseworker's working record.
+  - typeName: case_note
+    displayName: Case entry
+    description: A confidential entry against a case (intake note, status update, decision, etc.).
+    indexMode: HYBRID
+    allowedSurfaces: [record]
+    fields:
+      - fieldId: caseId
+        fieldType: reference
+        targetTypeName: case
+        targetSurface: record
+        targetField: externalId
+        cardinality: one
+        required: true
+        description: >
+          A typed foreign-key reference to the owning `case` record — NOT an ownership dimension.
+          Permissions here still come entirely from this record's [org:<id>, client:<id>] scope
+          (client-by-client, matching the case's own); `caseId` exists only so a query can ask for
+          ONE case's entries, which the scope alone can't do once a client has more than one case.
+          Resolves against `case`'s own `externalId` (`createCase.ts`'s `generateCaseExternalId()`)
+          — the platform's reference mechanism always resolves via a target's declared UNIQUE
+          lookup, defaulting to `externalId`; there's no way to reference a record by its plain
+          system id.
+      - fieldId: noteType
+        fieldType: enum
+        required: true
+        enumValues: [intake, update, decision, communication, other]
+        renderHints: { label: "Entry type", widget: select }
+      - fieldId: body
+        fieldType: string
+        required: true
+        searchable: true
+        renderHints: { widget: textarea }
+    lookupFields:
+      - noteType
+      - caseId
+
+  # File attachments against a case. A separate typeName from `case` because a schema that
+  # declares a composite lookup can't also carry a document surface.
+  - typeName: case_document
+    displayName: Case document
+    description: A file attached to a case (same ownership as its case's notes).
+    indexMode: HYBRID
+    allowedSurfaces: [document]
+    fields:
+      - fieldId: caseId
+        fieldType: reference
+        targetTypeName: case
+        targetSurface: record
+        targetField: externalId
+        cardinality: one
+        required: true
+        description: >
+          Same reference/lookup role as `case_note.caseId` (see its own description for the full
+          reasoning), pointed at the same target. Permissions come from this document's
+          [org:<id>, client:<id>] scope, not from `caseId`, which exists purely so a query (or a RAG
+          `search.filters`) can narrow to exactly one case. Stamped via `payload` at upload time
+          (`documents.uploadDocument`'s `schemaId` binds this schema; `payload: { caseId }` sets the
+          field, to the owning case's `externalId` — its plain system id will not resolve).
+    lookupFields:
+      - caseId
+
+  # Company-level info about an org itself, shown on the Org Management screen. Bound to the
+  # `org` namespace's entities via each entity's own `schemaId` — the namespace belongs to the
+  # entity, not the schema — so this is entity-surfaced rather than record-surfaced. Left
+  # unindexed (`indexMode: NONE`): an org's profile fields aren't case content and have no search
+  # or RAG use case.
+  - typeName: org_profile
+    displayName: Org profile
+    description: >
+      Company-level info about an org itself — set by whoever founded or administers it.
+    indexMode: NONE
+    allowedSurfaces: [entity]
+    fields:
+      - fieldId: industry
+        fieldType: enum
+        required: false
+        enumValues: [technology, healthcare, finance, manufacturing, retail, professional_services, other]
+        renderHints: { label: Industry, widget: select }
+      - fieldId: headquarters
+        fieldType: string
+        required: false
+        renderHints: { label: "Headquarters (city, state/country)" }
+      - fieldId: employeeCountRange
+        fieldType: enum
+        required: false
+        enumValues: ["1-50", "51-200", "201-1000", "1000+"]
+        renderHints: { label: "Employee count", widget: select }
+
+  # Employee-level info about the person a case is about — same schema-on-entity pattern as
+  # `org_profile` above, on the `client` namespace instead. All optional: a client's `name` alone
+  # is enough to create one (the case-creation quick-add path never fills this in), profile detail
+  # is filled in later from the client's own detail screen.
+  #
+  # No `entities:d:client` grant anywhere in this blueprint, deliberately — deleting a client while
+  # cases/notes/documents still reference it via `scope:client:<id>` would orphan them, and there's
+  # no composed/transactional endpoint to cascade the delete safely (the same gap `createCase.ts`'s
+  # own header comment documents for the create path — a platform limitation, not a bug to work
+  # around here). Deactivating a client uses the entity's own platform-native `status` field
+  # instead (`ACTIVE`/`SUSPENDED` — `SUSPENDED` entities are retained but blocked from new
+  # operations, per the SDK's own `EntityRequest.status` doc), which needs no schema field and no
+  # new grant beyond the ordinary `entities:u:client` update clause below.
+  - typeName: client_profile
+    displayName: Client profile
+    description: >
+      Employee-level info about a client (the person a case is about) — set from the client's own
+      detail screen, independent of any one case.
+    indexMode: NONE
+    allowedSurfaces: [entity]
+    fields:
+      - fieldId: department
+        fieldType: string
+        required: false
+        renderHints: { label: Department }
+      - fieldId: jobTitle
+        fieldType: string
+        required: false
+        renderHints: { label: Job title }
+      - fieldId: employeeId
+        fieldType: string
+        required: false
+        renderHints: { label: "Employee ID" }
+      - fieldId: startDate
+        fieldType: date
+        required: false
+        renderHints: { label: Start date }
+
+  # Backs `${{ member.scope.org }}` resolution. One row = one org-level grant. `targetUserId` is
+  # the resolver's `membershipTargetField` — it must be a declared lookup field (below) or the
+  # namespace resolves to nothing for every principal. The row references the target user; it
+  # does NOT own them (its own ownership stamp is whoever creates it — the grantor). Write access
+  # is hr-admin-only (see roles below) — granting write on a membership record type to the members
+  # it governs would be a self-elevation hole no platform-side check can close on its own.
+  - typeName: org_membership
+    displayName: Org membership
+    description: "A grant of org-level authority to a user — backs the member.scope.org selector."
+    indexMode: NONE
+    allowedSurfaces: [record]
+    fields:
+      - fieldId: targetUserId
+        fieldType: string
+        required: true
+        description: "userId of the user this grant is FOR."
+      - fieldId: level
+        fieldType: enum
+        required: true
+        enumValues: [admin, member]
+        renderHints: { label: Level, widget: select }
+    lookupFields:
+      - targetUserId
+
+  # Same shape one level down: backs `${{ member.scope.client }}` / `${{ member.scope.client:admin
+  # }}` resolution. Stamped [org:<id>, client:<id>] — both dims, mirroring `case` — so it can be
+  # CRUD'd with the same org-authority clause shape every other hr-admin grant already uses,
+  # rather than inventing a new scoping pattern for one schema. `level: admin` is the one thing
+  # that gates DELETE on a case (case-handler's own delete clause, below); `member` grants update
+  # only.
+  - typeName: client_membership
+    displayName: Client membership
+    description: >
+      A grant of authority over one client (case) compartment to a user — backs the
+      member.scope.client selector (bare, or level-qualified with :admin).
+    indexMode: NONE
+    allowedSurfaces: [record]
+    fields:
+      - fieldId: targetUserId
+        fieldType: string
+        required: true
+        description: "userId of the user this grant is FOR."
+      - fieldId: level
+        fieldType: enum
+        required: true
+        enumValues: [admin, member]
+        renderHints: { label: Level, widget: select }
+    lookupFields:
+      - targetUserId
+
+# The service principal's own profile — deliberately minimal. Real end-user access comes from
+# `roles:` below, assigned per-user at invite time, not from this.
+accessProfile:
+  allowedActions:
+    - records:r:case
+    - records:r:case_note
+
+# Role ids below are HYPHENATED (`case-handler`, `hr-admin`), not underscored — this is load-bearing,
+# not a style choice: the platform's role-id validation pattern is `^[a-z][a-z0-9-]{2,30}$`
+# (lowercase start, lowercase/digits/hyphens only, 3-31 chars total) — an underscore, an uppercase
+# letter, or a leading digit all reject outright, so `case_handler`/`hr_admin` would fail the
+# moment `blueprint apply`/`bootstrap` tried to create either role. Do not "clean up" these names
+# back to underscores for readability, and keep any new role id within the same pattern.
+roles:
+  # Creates and manages cases within their own org. A user with more than one org membership
+  # simply has this role apply per their currently-active org — it's one role either way, not a
+  # separate "multi-org" variant.
+  #
+  # Every `scope:org` dataScope value below resolves via `${{ member.scope.org }}` — PER REQUEST,
+  # from this user's `org_membership` records — rather than a single identity-pinned "active org"
+  # value, because a case handler's org reach IS their membership set, never one active org at a
+  # time. (An identity-pinned `${{ self.scope.org }}` alternative exists in the platform's
+  # expression language, set only via a dedicated tenant-selection endpoint that this app doesn't
+  # use — every clause below deliberately uses the per-request membership form instead.)
+  #
+  # This role IS reachable end to end: `hr-admin`'s Team screen can invite a `case-handler` today
+  # (see that role's own capability grant below), and this role's own clauses are the shape that
+  # invite exercises. `case-handler`'s org reach comes entirely from the `org_membership` row that
+  # invite stamps — see the namespace declaration above for the mechanism.
+  case-handler:
+    # Split into one clause per verb (rather than one combined create+read+update+delete clause)
+    # because update and delete need genuinely DIFFERENT scope values — not just different verbs
+    # on the same clause — and a single clause naming a dimension requires ALL of its values to
+    # match simultaneously, so one clause can't correctly serve both.
+    #
+    # CREATE — org-wide (any org member), plus a wildcarded client dim: a case/case_note/document
+    # create always stamps BOTH `org:<id>` and `client:<id>` (the case's compartment id — see the
+    # `case` schema's own description), and the platform's create-side guard denies a write
+    # outright unless the authorizing clause has a key for EVERY dimension it stamps.
+    # `${{ any }}` (not a specific value) because the case doesn't exist yet to have its own
+    # membership at create time.
+    - allowedActions: [records:c:case, records:c:case_note, documents:c]
+      dataScope:
+        userId: ['${{ self.userId }}']
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+    # READ — requires BOTH `scope:org` AND `scope:client`: admins get full visibility to their
+    # orgs, but a case handler only gets visibility to their own cases or cases for clients they
+    # hold appropriate membership in. `scope:client` matches the client's founder
+    # (`under.self.userId`) or any-level `client_membership`, mirroring UPDATE exactly (broader
+    # than DELETE's admin-only requirement — reading a case doesn't need the same bar as deleting
+    # one).
+    #
+    # Because this clause names TWO SET-valued dimensions at once, `listRecords`'s single `scope=`
+    # query param can't satisfy it on its own (the platform's admission rule normally wants an
+    # explicit caller-supplied filter per non-wildcard dimension, and the query param only ever
+    # carries one `namespace:value` pair) — it relies on the platform's relaxed variant of that
+    # check instead, satisfied once at least one non-wildcard dimension carries an explicit
+    # filter. The frontend's default "all" case-list view fans `listRecords` out one call per org
+    # (`scope=org:<id>` — the explicit filter satisfying the relaxed check), then leans on the
+    # platform's own post-query filtering to narrow the `scope:client` dimension per role. A real
+    # status filter goes through a lookup-style call instead (a coarser allow-check plus full
+    # post-query filtering, no per-dimension param needed at all).
+    - allowedActions: [records:r:case, records:r:case_note, documents:r, search:r, inference:r]
+      dataScope:
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ under.self.userId }}', '${{ member.scope.client }}']
+    # UPDATE — the client's founder (`under.self.userId` — creating a client entity stamps its own
+    # `partnerUserId` with the creator) OR any-level `client_membership`. Ordinary assigned-handler
+    # write — ability to close or correct a case they're on. `scope:org` is included as
+    # defense-in-depth against a `client_membership` row that names a client belonging to a
+    # DIFFERENT org than the caller's own membership — the platform's entity-backed scope
+    # validation checks only that the referenced client entity EXISTS, not that it was founded
+    # under the same org the write also stamps (documented, accepted platform behavior, not a bug
+    # to fix here). Without this key, a case-handler with a `client_membership` row for a client
+    # outside their own org would still match on `scope:client` alone. Costs nothing legitimate: a
+    # handler's `client_membership` row is only ever useful within an org they're already a
+    # member of.
+    - allowedActions: [records:u:case, records:u:case_note]
+      dataScope:
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ under.self.userId }}', '${{ member.scope.client }}']
+    # DELETE — narrower than update: the founder, or ONLY admin-level `client_membership` (not any
+    # level) — delete is materially more destructive than a status-change/update. Same `scope:org`
+    # defense-in-depth as UPDATE, same reasoning.
+    - allowedActions: [records:d:case, records:d:case_note]
+      dataScope:
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ under.self.userId }}', '${{ member.scope.client:admin }}']
+    # Read-only reach on their own org.
+    - allowedActions: [entities:r:org]
+      dataScopeRef: orgReach
+    # Create is org-wide (adding a brand-new client to your own org needs no relationship to that
+    # client yet — there isn't one until this call makes it), deliberately kept separate from the
+    # narrower READ clause below: giving every case-handler org-wide READ on every client entity
+    # in their org regardless of whether they founded it or hold a `client_membership` grant for
+    # it would be inconsistent with the narrowing this role's case/case_note READ clause already
+    # enforces, and with this app's client-data-isolation design.
+    - allowedActions: [entities:c:client]
+      dataScopeRef: orgReach
+    # READ, narrowed — same dimension shape as this role's own case/case_note READ clause,
+    # applied to the client entity itself. Relies on the platform's own self-referential
+    # `scope:client:<own-id>` stamp every identity entity carries automatically at creation.
+    # Consequence, deliberate: a case-handler who neither founded a client NOR holds a
+    # `client_membership` grant for it can no longer see that client exists at all — including in
+    # the case-creation "existing client" picker. This is the whole point of the narrowing, and it
+    # makes `client_membership` load-bearing — see the "assign a case-handler to a client" control
+    # on `ClientDetailPage`'s Members section.
+    #
+    # `scope:org` is included alongside `scope:client` for the same reason it's included on the
+    # UPDATE/DELETE clauses above: an omitted dimension matches every value at enforcement time, so
+    # without it a `client_membership` row naming a client entity belonging to a DIFFERENT org
+    # than the caller's own membership (a real, documented platform gap — entity-backed scope
+    # validation checks only that the referenced entity EXISTS, not that it was founded under the
+    # same org) would let a case-handler read/update that out-of-org client. It's also required for
+    # `hr-admin` to be able to grant this role at all — the platform's role-delegation check
+    # requires every clause of a role being granted to be covered by one of the granting caller's
+    # own clauses, and `hr-admin`'s covering clauses only cover a `scope:org`-bearing shape.
+    - allowedActions: [entities:r:client]
+      dataScope:
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ under.self.userId }}', '${{ member.scope.client }}']
+    # UPDATE — same shape as this role's case/case_note UPDATE clause: the founder, or any-level
+    # `client_membership` (mirrors "member grants update, admin grants delete" — this blueprint
+    # adds no entity delete anywhere; see `client_profile`'s own header comment on why archiving
+    # via `status` replaces delete for this record type). `scope:org` for the same reason as the
+    # READ clause immediately above.
+    - allowedActions: [entities:u:client]
+      dataScope:
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ under.self.userId }}', '${{ member.scope.client }}']
+    # Create+read on folders — each case gets its own folder for document upload, scoped
+    # identically to the case/case_note/document create clause above so a handler can only create a
+    # folder inside their own org compartment, never another company's.
+    - allowedActions: [folders:cr]
+      dataScope:
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+    # `org_membership` self-read. Every other read grant above (`entities:r:org`, the case/
+    # case_note reads) requires the caller to already KNOW the org id — none of them let a
+    # case-handler answer "which org(s) am I even a member of" in the first place. This narrow,
+    # self-only clause closes that: `hr-admin`'s invite flow stamps `userId:<invitee>` onto the
+    # `org_membership` row it creates (see that role's own grant below), so a case-handler can
+    # list their OWN membership rows and read each one's `scope:org:<id>` to discover their orgs —
+    # the same self-referential pattern `hr-admin`'s own founder-discovery clause elsewhere in
+    # this file already uses for orgs. Narrow by construction: `userId: self.userId` only ever
+    # matches rows this exact caller is the target of.
+    - allowedActions: [records:r:org_membership]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    # `client_membership` self-read + `client` entity self-discovery, same reasoning as
+    # `org_membership` self-read above, needed because the case/case_note READ clause requires
+    # `scope:client` too. Two gaps this closes: (1) a case-handler who FOUNDED a client (via
+    # `entities:cr:client` above) has no other way to DISCOVER which clients that is — every other
+    # client-scoped grant requires already knowing the client id; mirrors `hr-admin`'s own
+    # org-founder-discovery clause at the client tier instead of the org tier. (2) a case-handler
+    # who was GRANTED `client_membership` (not the founder) needs to read that row to discover the
+    # client id at all — mirrors `org_membership` self-read directly.
+    - allowedActions: [entities:r:client]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    - allowedActions: [records:r:client_membership]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    # This role deliberately does NOT hold `records:c:client_membership` — a case-handler who
+    # picks an EXISTING client someone else founded therefore gets no way to self-grant a
+    # membership row over it (only `hr-admin`'s own full-CRUD grant on this schema can create
+    # one). That's intentional, not an oversight: `dataScope` constrains only OWNERSHIP dimensions
+    # (`userId`, `scope:<ns>`) — it has no mechanism to constrain an ordinary PAYLOAD field's
+    # value, and `client_membership`'s `level` field (admin/member) is exactly such a value. A
+    # case-handler holding a create grant on this schema could set `level: 'admin'` themselves
+    # (the app's own code sending `'member'` by convention is not an enforcement boundary),
+    # self-granting admin-level authority — including DELETE, per this role's own delete clause
+    # above — over any client in their org, or (absent the `scope:org` defense-in-depth these
+    # clauses already carry) even a client belonging to a different org entirely, given only its
+    # entity id. Granting write on a membership record type to the members it governs, rather than
+    # to grantors only, is a self-elevation hole worth naming explicitly if you're extending this
+    # blueprint's role model. **Consequence, by design, not a silent gap**: a case-handler picking
+    # an EXISTING client someone else founded gets no automatic update/delete reach on cases under
+    # it — only `hr-admin`'s own membership-CRUD grant can create that row, via the "assign a
+    # case-handler to a client" control. The founder path (`under.self.userId`) is unaffected and
+    # still free.
+    # Needed to render any schema-driven screen (case list/detail, org profile) — a schema
+    # definition is a context-scoped resource, not per-principal data, so no scope is needed here.
+    - allowedActions: [schemas:r]
+
+  # Sees and updates every case in orgs they reach — either founded (self-service org creation) or
+  # invited into. `hr-admin`'s authority is UNCONDITIONAL and role-based, not gated on any
+  # `org_membership` level: an org's founder never gets an `org_membership` row for their own org
+  # (founding uses `entities:cud:org` + `under.self.userId` alone), so hr-admin's case authority
+  # comes from holding the `hr-admin` role, full stop — the `admin`/`member` level split only
+  # ever gates `client_membership` (case-handler's delete clause above), never `org_membership`.
+  hr-admin:
+    # Split by verb (rather than one combined create+read+update+delete clause), matching the
+    # pattern `case-handler`'s own role above already uses, and for largely the same underlying
+    # reason: CREATE carries its own `userId: self.userId` audit stamp (folding it into
+    # read/update/delete would wrongly narrow them to self-created cases only), and READ
+    # deliberately OMITS `scope:client` entirely for maximal breadth — an org admin's full
+    # visibility across their org was never in question, only case-handler's needed narrowing (see
+    # that role's own comment). UPDATE and DELETE, checked against each other, have identical
+    # dataScope and are combined into one clause below.
+    #
+    # CREATE — `scope:client: any` stays (the full-dimension-coverage rule, same as case-handler's
+    # own create clause). Also names `userId: self.userId` as an audit-trail stamp (which admin
+    # created this case) — a narrow, self-only addition that can never resolve to anyone else's
+    # id, so it widens nothing about what hr-admin can place; it exists because it's also the
+    # dimension case-handler's own create clause needs a caller-side match on to be delegatable at
+    # all (the platform's role-delegation check requires the delegate clause's dimensions to be
+    # backed by a matching key on the granting caller's own clause).
+    #
+    # `documents:c`, not just `documents:r` — hr-admin as founder could otherwise read a case's
+    # attached documents but never upload one itself, unlike case-handler (which holds
+    # `documents:c` on its own create clause). Same scope shape as the record grants on this
+    # clause — a founder/admin attaching a document to a case they can already fully CRUD needs
+    # create authority here too.
+    - allowedActions: [records:c:case, records:c:case_note, documents:c]
+      dataScope:
+        userId: ['${{ self.userId }}']
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+    # READ — deliberately does NOT mirror case-handler's own READ clause's dimension shape:
+    # hr-admin's read reach stays org-wide, every client (omitting the `scope:client` dimension
+    # entirely is broader than naming it as a wildcard) — an org admin's full-visibility reach was
+    # never in question, only case-handler's needed narrowing. This still covers case-handler's
+    # READ clause for role-delegation purposes despite the different dimension shape: a read-only
+    # requested clause may add a dimension the caller doesn't constrain at all (the platform's
+    # delegation check applies a read-narrowing exception here that a write-granting clause
+    # doesn't get), and case-handler's `scope:client` value resolves through the membership
+    # mechanism this blueprint wires above, which the platform admits unconditionally for
+    # delegation purposes regardless of what hr-admin's own clause states for a dimension it
+    # doesn't even name.
+    - allowedActions: [records:r:case, records:r:case_note, documents:r, search:r, inference:r]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+    # UPDATE + DELETE, one clause — CREATE needs its own `userId: self.userId` audit stamp (folding
+    # it in here would wrongly narrow update/delete to self-created cases only) and READ
+    # deliberately omits `scope:client` entirely for maximal breadth (folding it in here would
+    # silently re-narrow READ instead). UPDATE and DELETE, checked against each other specifically,
+    # have identical dataScope, so they're combined.
+    - allowedActions: [records:ud:case, records:ud:case_note]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+    - allowedActions: [schemas:r]
+    # `c` alongside `r`: a case's client entity must exist BEFORE the case does (a client is a
+    # real, reusable entity, not the case's own self-reference), so hr-admin — the only role
+    # self-signup can actually produce today — needs create authority here or it could never
+    # create its own first case for a new employee.
+    - allowedActions: [entities:cr:client]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+    # UPDATE — a separate clause, matching the pattern this role's `case`/`case_note` grants
+    # already establish (READ / UPDATE / DELETE each their own clause, never combined, because
+    # their dataScope shapes genuinely differ). READ above OMITS `scope:client` entirely, so
+    # bundling `u` into it would have silently narrowed that READ shape.
+    # `scope:client: ['${{ any }}']` here (not omitted) is REQUIRED so this clause covers
+    # case-handler's narrower `entities:u:client` clause for role-delegation purposes — identical
+    # reasoning already applied to this role's `records:u:case`/`records:u:case_note` clause
+    # above, which names the same key for the same reason.
+    - allowedActions: [entities:u:client]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+    # Create+read on folders, same reasoning as case-handler's identical grant above — an
+    # org-founder (or invited hr-admin) creating a case needs to create that case's folder too.
+    - allowedActions: [folders:cr]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+    # Full CRUD on both membership schemas — hr-admin is the only role that can write these;
+    # scoped the same way as its other org-authority grants above. `userId: ['${{ any }}']`: the
+    # create call stamps `userId:<targetUserId>` on the row it creates (the invitee, not the
+    # caller — hr-admin is legitimately granting membership to an ARBITRARY third party, so
+    # `self.userId` would be wrong here), required by the create-side full-dimension-coverage rule
+    # (every dataScope key a create stamps must be covered by the authorizing clause). The stamp
+    # itself is what lets case-handler's own narrow, self-only read grants above discover which
+    # orgs/clients they belong to.
+    #
+    # `capabilities: [delegate-principal-stamp]` — this clause's own `userId: any` admits a foreign
+    # userId, but that admission alone doesn't bypass the platform's separate ownership-identity
+    # check: a create's `userId` still has to match the caller's own identity unless the caller
+    # also holds this capability. The invite flow stamps `userId:<invitee>` (not the inviter's own
+    # id) when granting org-level membership, so hr-admin needs the capability to actually place
+    # that stamp. The capability is a token-level grant, not clause-scoped — it lives here purely
+    # for locality with the write it unblocks.
+    - allowedActions: [records:crud:org_membership]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+        userId: ['${{ any }}']
+      capabilities: [delegate-principal-stamp]
+    - allowedActions: [records:crud:client_membership]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+        userId: ['${{ any }}']
+    # Three narrow, self-only reads, mirroring case-handler's own self-only discovery grants
+    # exactly (`records:r:org_membership`, `records:r:client_membership`, `entities:r:client`, all
+    # `dataScope: { userId: ['${{ self.userId }}'] }`). Required for role delegation: the
+    # platform's delegation check demands ONE SINGLE caller clause cover each requested clause —
+    # action AND dataScope both — never a union across clauses. hr-admin's broader org-scoped
+    # clauses above all name a `scope:org` key that case-handler's `userId`-only clauses don't
+    # share, so those broader clauses alone can't cover them — without a clause here, hr-admin
+    # could no longer invite (or resend an invite to) case-handler at all, since the delegation
+    # check rejects the WHOLE role grant the moment any one clause goes uncovered. Not a widening
+    # in practice: this is only reachable for hr-admin's OWN org_membership/client_membership rows
+    # (an invited, non-founding hr-admin's own membership) or clients hr-admin itself founded,
+    # which the broader org-scoped grants above already cover for hr-admin's own use; its only new
+    # effect is making these clauses coverable at all for delegation.
+    - allowedActions: [records:r:org_membership]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    - allowedActions: [records:r:client_membership]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    - allowedActions: [entities:r:client]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    # Read reach on `org` entities needs two clauses for two different call shapes: one for
+    # "I already know the org id" reads (founded or invited), and one dedicated to enumerating
+    # every org this user has founded (an org-founder lookup by user id, independent of already
+    # knowing which orgs exist) — without the second clause a founder would have no way to
+    # discover their own orgs.
+    - allowedActions: [entities:r:org]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+    - allowedActions: [entities:r:org]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    # Write/delete authority on `org` entities is narrower than read, deliberately: an admin who
+    # was only invited into an org must not be able to rename or delete it — only the org's actual
+    # founder can, hence the ownership scope here matches the user's own id, not the broader org
+    # scope the read clauses above use.
+    - allowedActions: [entities:cud:org]
+      dataScope:
+        userId: ['${{ self.userId }}']
+    # No separate grant for org_profile: it's entity-surfaced, so writing and reading it goes
+    # through the entities:cud:org / entities:r:org grants above, which already cover the org
+    # entity itself.
+    # The mechanism that lets `hr-admin` invite people without holding raw tenant-wide user-
+    # management reach. `member-lifecycle` is the platform's own context-bounded capability for
+    # exactly this: create/remove identities, confined to this app context alone.
+    # `dataScope: {}` is REQUIRED, not just permitted — `profiles` isn't an ownership-scoped
+    # resource the way `records`/`entities` are, and the platform's own elevation check requires
+    # the grant fully UNQUALIFIED (no qualifier segment at all); a scoped `dataScope` here would
+    # silently fail to satisfy it. `profiles:r` backs the Team screen's member roster — that read
+    # doesn't itself require the capability, it's included here only because hr-admin is the only
+    # role that needs it. `profiles:d` backs removing a member. No `profiles:u` deliberately —
+    # re-inviting an already-pending email would otherwise silently rotate/resend the invite
+    # token, which this blueprint explicitly avoids relying on.
+    - allowedActions: [profiles:c, profiles:r, profiles:d]
+      dataScope: {}
+      capabilities: [member-lifecycle]
+    # Tenant-wide user-read access (the kind of grant that would let the Team screen show a
+    # member's real name/email directly, instead of falling back to a bare principal id) is
+    # deliberately NOT included here. The platform's own bootstrap tooling hard-rejects any
+    # tenant-wide user scope on any blueprint role, unconditionally and with no override — by
+    # design, since a human who genuinely needs a control-plane-scoped credential is expected to
+    # mint one deliberately through the developer portal, never via an automated blueprint loader.
+    # Adding it here would break `vectros bootstrap`/`vectros blueprint apply` outright for this
+    # entire blueprint, not just this one clause — a structural constraint, not a sign-off
+    # question. As shipped, the Team roster resolves a member's email only when the platform is
+    # able to on its own; when it can't, the UI falls back to showing the member's bare principal
+    # id instead of leaving a blank field.

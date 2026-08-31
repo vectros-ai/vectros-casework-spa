@@ -1,0 +1,19 @@
+{
+  "name": "vectros-casework-spa-e2e",
+  "version": "0.0.0",
+  "description": "Playwright e2e smoke suite for casework-spa — verify your fork actually works end to end (sign-in, orgs, clients, cases, team/invite). Runs against a local dev server or a real deployed instance; see README.md.",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "lint": "tsc --noEmit",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^20.11.30",
+    "typescript": "^5.4.5"
+  }
+}

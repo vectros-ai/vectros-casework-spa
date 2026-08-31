@@ -1,0 +1,60 @@
+{
+  "name": "vectros-casework-spa",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "description": "HR case management — a forkable, no-backend reference app for the Vectros platform. Auth0 sign-in, a Vectros blueprint for provisioning, and zero application server: fork it, point it at your own Auth0 tenant, and ship.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@auth0/auth0-spa-js": "2.24.1",
+    "@emotion/react": "11.14.0",
+    "@emotion/styled": "11.14.1",
+    "@mui/icons-material": "7.3.11",
+    "@mui/material": "7.3.11",
+    "@tanstack/react-query": "5.100.14",
+    "@tanstack/react-query-devtools": "5.100.14",
+    "@vectros-ai/sdk": "^0.42.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-intl": "10.1.11",
+    "react-router": "^8.3.0",
+    "@vectros-ai/react": "^0.10.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.1.0",
+    "@testing-library/user-event": "14.5.2",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "9.39.4",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "5.1.0",
+    "eslint-plugin-react-refresh": "0.4.16",
+    "globals": "15.14.0",
+    "jsdom": "29.1.1",
+    "prettier": "3.4.2",
+    "typescript": "5.7.2",
+    "typescript-eslint": "8.20.0",
+    "vite": "8.1.4",
+    "vitest": "4.1.10"
+  }
+}
