@@ -33,6 +33,14 @@ gate, which would let a real type error ship silently.
 Do **not** connect a repo yet if you'd rather deploy via the Vercel CLI instead (§6 below) — that
 path creates the project without any Git connection at all.
 
+**If connecting fails with `You need to add a Login Connection to your GitHub account first`**:
+your Vercel account has never linked the GitHub identity that owns your fork — common the first
+time you fork to a personal account different from whatever you originally signed into Vercel with.
+Vercel Account Settings → Login Connections (or accept the GitHub App authorization prompt Vercel
+shows when it can find one) fixes it; there's nothing wrong with your fork or this app. Confirmed
+hitting this for real forking to a personal GitHub account — §6's CLI path creates the project fine
+either way, just without automatic deploy-on-push until the connection is fixed.
+
 ## 3. Set environment variables
 
 **Settings → Environment Variables**, scoped to **Production**: the same five `VITE_*` values from
@@ -79,11 +87,28 @@ vercel build --prod
 vercel deploy --prebuilt --prod
 ```
 
-`vercel build` runs the Build Command configured in step 2 (or Vite's zero-config default if you
-never overrode it — set it explicitly either way, per that step's own note) locally, producing a
-`.vercel/output` directory; `vercel deploy --prebuilt` uploads exactly that, with no rebuild on
-Vercel's infrastructure. Environment variables (step 3) and Deployment Protection (step 4) still
-apply the same way regardless of which path created the project.
+On a freshly-linked project with no dashboard Build Command override ever set, `vercel build` has
+been observed running this app's own `npm run build` script (`tsc --noEmit && vite build`)
+correctly — not the bare `vite build` step 2 warns the dashboard's own Vite-framework
+auto-detection can silently fall back to. That's a real, encouraging data point, but not a
+guarantee this path is categorically exempt from that warning: treat it the same as step 2 either
+way — confirm **Settings → Build & Development Settings → Build Command** actually reads
+`npm run build` for whichever project you're deploying, especially after a project's settings are
+ever reset. `vercel deploy --prebuilt` uploads exactly what `vercel build` produced
+(`.vercel/output`), with no rebuild on Vercel's infrastructure. Environment variables (step 3) and
+Deployment Protection (step 4) still apply the same way regardless of which path created the
+project.
+
+**Scripting this (CI, or a coding agent driving the deploy) instead of running it interactively**:
+`vercel link`'s prompts need a live terminal by default. Skip them explicitly:
+
+```bash
+vercel link --yes --scope <your-team-or-username> --project <project-name>
+```
+
+`--project` names a brand-new project just as well as an existing one — you don't need to create it
+in the dashboard first. `vercel build` and `vercel deploy` above already run non-interactively with
+no extra flags needed.
 
 ## 7. Finish the Auth0 side
 

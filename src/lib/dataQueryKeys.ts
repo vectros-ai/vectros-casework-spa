@@ -57,4 +57,11 @@ export const dataQueryKeys = {
   caseDocuments: (caseId: string) => ['cases', 'documents', caseId] as const,
   /** The inference model registry (`GET /v1/models`) — shared by every AI surface. */
   inferenceModels: () => ['inference', 'models'] as const,
+  /** A search result page, keyed by the org scoped to, the submitted query, and the ranking mode —
+   *  so changing the mode re-runs the search without a re-submit. */
+  search: (orgId: string, query: string, mode: string) => ['search', orgId, query, mode] as const,
+  /** Resolves a `case_note`/`case_document` search result's `caseId` (the case's `externalId`, per
+   *  the blueprint's reference field) to the case's system id, for routing a search result back to
+   *  its case — same resolve-by-value shape `app-vectros-ai`'s `ReferenceLink` already uses. */
+  caseByExternalId: (externalId: string) => ['cases', 'byExternalId', externalId] as const,
 };

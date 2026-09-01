@@ -38,10 +38,10 @@ test.describe('team', () => {
 
   test('invites a case handler and the roster reflects it', async ({ page }) => {
     // example.com (RFC 2606) -- reserved for documentation/testing, never a
-    // real deliverable mailbox. This suite ships publicly (#1110): a
-    // forker's own deployment mints a REAL invite send, so a hardcoded
-    // @vectros.ai address would target the VENDOR's own domain from every
-    // fork that runs this spec, not a safe throwaway.
+    // real deliverable mailbox. This suite ships publicly: a forker's own
+    // deployment mints a REAL invite send, so a hardcoded @vectros.ai
+    // address would target the VENDOR's own domain from every fork that
+    // runs this spec, not a safe throwaway.
     const inviteEmail = `smoke-team-invite-${Date.now()}@example.com`;
     await ensureOrgExists(page, SMOKE_ORG_A);
     await page.goto('/team', { waitUntil: 'networkidle' });
@@ -55,7 +55,7 @@ test.describe('team', () => {
       (res) => res.url().includes('/v1/users/invite') && res.request().method() === 'POST',
     );
 
-    await page.getByRole('button', { name: '+ Invite' }).click();
+    await page.getByRole('button', { name: 'Invite' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Invite someone' })).toBeVisible();
     // The dialog's own fields are gated behind an async "your orgs" fetch

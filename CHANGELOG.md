@@ -4,6 +4,35 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-09-01
+
+### Added
+
+- **Hybrid search** (`/search`) across cases, case entries, and case documents — `hr-admin` only
+  for now (`case-handler`'s access is blocked on the same platform-side scope limitation as the
+  "Ask" panel; see `SearchPage.tsx`'s header comment). Uses the promoted `SearchResultCard`/
+  `SearchModeToggle` primitives from `@vectros-ai/react` `0.11.0`.
+
+### Fixed
+
+- **Double `+` on every create/add button.** `orgs.createButton`/`clients.createButton`/
+  `cases.createButton`/`team.inviteButton` baked a literal `"+ "` into their copy on top of an
+  already-rendered icon — dropped the literal prefix, the icon alone now supplies the plus.
+  (`clientDetail.assignButton` is unaffected — it has no icon, so its own `+` was already correct.)
+
+### Changed
+
+- `blueprint/casework.blueprint.yaml`: `case.caseType`/`case_note.caseId`/`case_document.caseId`
+  are now `filterable`, so a search result carries a real title and can route back to its case —
+  previously no field on any of these schemas was filterable, so search results carried only their
+  bare `recordType`. `case.status` deliberately was NOT made filterable, despite the same
+  reasoning otherwise applying — it collides with a search-metadata key the platform's own
+  indexer already writes unconditionally (see the blueprint's own comment on that field for the
+  full trace). **Re-apply this blueprint** (this app's own Quickstart step 3) for existing
+  deployments — this only changes what a case/case entry/document writes into its search metadata
+  going forward, not what's already indexed: an existing record's search result won't carry a
+  title or a case link until it's next re-saved (or explicitly reindexed).
+
 ## [1.0.0] - 2026-08-30
 
 ### Added

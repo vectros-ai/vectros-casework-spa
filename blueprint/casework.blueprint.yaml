@@ -144,6 +144,21 @@ schemas:
         required: true
         enumValues: [grievance, accommodation, onboarding, investigation, leave_request]
         renderHints: { label: "Case type", widget: select }
+        # Filterable so a case's own search-result title can show its case type instead of a
+        # generic "Case" label — the platform only propagates a payload field into search
+        # metadata when the schema marks it filterable; this field was declared but not
+        # filterable before, so every case search result carried its bare record type alone.
+        # A reindex is needed for existing cases to pick this up.
+        #
+        # Deliberately NOT applied to `status` below, even though the same reasoning would
+        # suggest it: the platform's own indexer writes an UNCONDITIONAL `status` key into
+        # every record's search metadata already (the record's own lifecycle status, a
+        # different value from this field), and a filterable payload field of the same name
+        # silently overwrites it — traced directly against the platform's own indexing code,
+        # not assumed. Search results here never need this field anyway (only `caseType` is
+        # read for the title), so leaving it non-filterable avoids the collision entirely
+        # rather than working around it.
+        filterable: true
       - fieldId: status
         fieldType: enum
         required: true
@@ -199,6 +214,11 @@ schemas:
           — the platform's reference mechanism always resolves via a target's declared UNIQUE
           lookup, defaulting to `externalId`; there's no way to reference a record by its plain
           system id.
+        # Filterable so a case-entry search result carries `caseId` in its search metadata —
+        # otherwise the search UI has no way to route a note result back to its owning case at
+        # all (the platform only propagates a payload field into search metadata when the
+        # schema marks it filterable).
+        filterable: true
       - fieldId: noteType
         fieldType: enum
         required: true
@@ -235,6 +255,9 @@ schemas:
           `search.filters`) can narrow to exactly one case. Stamped via `payload` at upload time
           (`documents.uploadDocument`'s `schemaId` binds this schema; `payload: { caseId }` sets the
           field, to the owning case's `externalId` — its plain system id will not resolve).
+        # Same reasoning as `case_note.caseId` above — filterable so a document search result
+        # carries `caseId` in its search metadata and can route back to its case.
+        filterable: true
     lookupFields:
       - caseId
 

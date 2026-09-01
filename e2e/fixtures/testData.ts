@@ -43,7 +43,7 @@ export async function ensureOrgExists(page: Page, name: string): Promise<void> {
 
   if (await existsWithin(page, page.getByRole('link', { name, exact: true }))) return;
 
-  await page.getByRole('button', { name: '+ Create org' }).click();
+  await page.getByRole('button', { name: 'Create org' }).click();
   await expect(page.getByRole('heading', { name: 'Create org' })).toBeVisible();
   await page.getByLabel('Org name').fill(name);
   await page.getByRole('button', { name: 'Create org', exact: true }).click();
@@ -58,17 +58,21 @@ export async function ensureOrgExists(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name, exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
-/** Selects orgName in a page's org picker, if one is rendered (only shown when the
- *  caller has more than one org -- several pages hide it entirely for a single-org caller).
- *  Waits for the picker's own "an org is now selected" signal (the empty-state prompt
- *  disappearing), not just a fixed pause -- see file header on why a snapshot isn't enough. */
+/** Selects orgName in a page's org picker, if one is rendered AND actually editable. Some pages
+ *  (e.g. `/cases`, `/clients`) hide the field entirely for a single-org caller; others (`/search`,
+ *  per `OrgPickerField`'s own documented contract) render it unconditionally but DISABLED for a
+ *  single-org caller — a disabled field fails Playwright's actionability check on `.click()`
+ *  (hangs to timeout, doesn't throw immediately), so this checks enabled-ness, not just presence,
+ *  before attempting to interact with it. Waits for the picker's own "an org is now selected"
+ *  signal (the empty-state prompt disappearing), not just a fixed pause -- see file header on why
+ *  a snapshot isn't enough. */
 export async function pickOrgIfPresent(page: Page, orgName: string): Promise<void> {
   const orgPicker = page.getByLabel('Org', { exact: true });
   // A bounded wait, not a `.count()` snapshot (see file header) -- the picker's own presence
   // depends on `useAccessibleOrgs` resolving `orgs.length > 1` asynchronously, so a snapshot
   // taken before that resolves would wrongly conclude "single-org caller, nothing to pick" and
   // silently proceed against whichever org is already showing.
-  if (await existsWithin(page, orgPicker, 8_000)) {
+  if ((await existsWithin(page, orgPicker, 8_000)) && (await orgPicker.isEnabled())) {
     await orgPicker.click();
     await page.getByRole('option', { name: orgName, exact: true }).click();
     // Whichever "org not yet picked" prompt this page shows must be gone before the org-scoped
@@ -93,10 +97,49 @@ export async function ensureClientExists(page: Page, orgName: string, name: stri
 
   if (await existsWithin(page, page.getByRole('link', { name, exact: true }))) return;
 
-  await page.getByRole('button', { name: '+ Create client' }).click();
+  await page.getByRole('button', { name: 'Create client' }).click();
   await expect(page.getByRole('heading', { name: 'Create client' })).toBeVisible();
   await page.getByLabel('Client name').fill(name);
   await page.getByRole('button', { name: 'Create client', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 10_000 });
   await expect(page.getByRole('link', { name, exact: true })).toBeVisible({ timeout: 15_000 });
+}
+
+/** Opens "New case", fills the minimum required fields for an EXISTING client in orgName,
+ *  submits, and returns the resulting case-detail URL. Shared by `04-cases.spec.ts` (its own
+ *  case-creation coverage) and `06-search.spec.ts` (needs a real case + entry to search for) --
+ *  moved here, not left spec-local, once a second file needed it (see file header on why a
+ *  fixtures/ module, not a .spec.ts, is the right home for anything more than one file uses). */
+export async function createCaseForExistingClient(
+  page: Page,
+  orgName: string,
+  clientName: string,
+): Promise<string> {
+  await ensureClientExists(page, orgName, clientName);
+  await page.goto('/cases', { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'New case' }).click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'New case' })).toBeVisible();
+
+  // A bounded wait, not a `.count()` snapshot (see file header) -- the picker only renders once
+  // CreateCaseDialog's own org-discovery query resolves AND finds more than one org, both async.
+  const orgSelect = dialog.getByLabel('Org', { exact: true });
+  if (await existsWithin(page, orgSelect)) {
+    await orgSelect.click();
+    await page.getByRole('option', { name: orgName, exact: true }).click();
+  }
+
+  await dialog.getByRole('button', { name: 'Existing client' }).click();
+  const clientSelect = dialog.getByLabel('Client', { exact: true });
+  await clientSelect.click();
+  await page.getByRole('option', { name: clientName, exact: true }).click();
+
+  const caseTypeSelect = dialog.getByLabel('Case type', { exact: true });
+  await caseTypeSelect.click();
+  await page.getByRole('option', { name: 'Grievance', exact: true }).click();
+
+  await dialog.getByRole('button', { name: 'Create case', exact: true }).click();
+  await page.waitForURL(/\/cases\/[^/]+$/, { timeout: 15_000 });
+  return page.url();
 }

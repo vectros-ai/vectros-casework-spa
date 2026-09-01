@@ -18,6 +18,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import FolderIcon from '@mui/icons-material/Folder';
 import GroupIcon from '@mui/icons-material/Group';
 import PeopleIcon from '@mui/icons-material/People';
+import SearchIcon from '@mui/icons-material/Search';
 
 import { AppLayout, RequireAuth, RequireScope } from '@vectros-ai/react';
 import type { NavItemSpec } from '@vectros-ai/react';
@@ -32,14 +33,16 @@ import { CaseDetailPage } from './pages/protected/cases/CaseDetailPage';
 import { ClientsListPage } from './pages/protected/clients/ClientsListPage';
 import { ClientDetailPage } from './pages/protected/clients/ClientDetailPage';
 import { TeamPage } from './pages/protected/team/TeamPage';
+import { SearchPage } from './pages/protected/search/SearchPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import { CallbackPage } from './pages/public/CallbackPage';
 import { LoginPage } from './pages/public/LoginPage';
 import { NotFoundPage } from './pages/public/NotFoundPage';
-import { CASES_ACTION, CLIENTS_ACTION, ORGS_ACTION, TEAM_ACTION } from './lib/scopeActions';
+import { CASES_ACTION, CLIENTS_ACTION, ORGS_ACTION, SEARCH_ACTION, TEAM_ACTION } from './lib/scopeActions';
 
 const NAV_ITEMS: ReadonlyArray<NavItemSpec> = [
   { to: '/', labelId: 'layout.navWelcome', gateAction: null, icon: <HomeIcon fontSize="small" /> },
+  { to: '/search', labelId: 'layout.navSearch', gateAction: SEARCH_ACTION, icon: <SearchIcon fontSize="small" /> },
   { to: '/cases', labelId: 'layout.navCases', gateAction: CASES_ACTION, icon: <FolderIcon fontSize="small" /> },
   { to: '/clients', labelId: 'layout.navClients', gateAction: CLIENTS_ACTION, icon: <PeopleIcon fontSize="small" /> },
   { to: '/orgs', labelId: 'layout.navOrgs', gateAction: ORGS_ACTION, icon: <BusinessIcon fontSize="small" /> },
@@ -66,6 +69,14 @@ export default function App(): React.JSX.Element {
       >
         <Route index element={<HomePage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route
+          path="/search"
+          element={
+            <RequireScope action={SEARCH_ACTION} tenantOverride={EXCHANGE_RESOLVED_TENANT}>
+              <SearchPage />
+            </RequireScope>
+          }
+        />
         <Route
           path="/cases"
           element={

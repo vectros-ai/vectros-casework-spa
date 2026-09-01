@@ -16,46 +16,15 @@
 
 import { test, expect } from '@playwright/test';
 import { perFileAuth } from '../fixtures/authed';
-import { SMOKE_ORG_A, SMOKE_ORG_B, SMOKE_CLIENT_A, SMOKE_CLIENT_B, ensureClientExists, existsWithin } from '../fixtures/testData';
+import {
+  SMOKE_ORG_A,
+  SMOKE_ORG_B,
+  SMOKE_CLIENT_A,
+  SMOKE_CLIENT_B,
+  createCaseForExistingClient,
+} from '../fixtures/testData';
 
 test.use({ storageState: perFileAuth(test) });
-
-/** Opens "+ New case", fills the minimum required fields for an EXISTING client
- *  in orgName, submits, and returns the resulting case-detail URL. */
-async function createCaseForExistingClient(
-  page: import('@playwright/test').Page,
-  orgName: string,
-  clientName: string,
-): Promise<string> {
-  await ensureClientExists(page, orgName, clientName);
-  await page.goto('/cases', { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: '+ New case' }).click();
-
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'New case' })).toBeVisible();
-
-  // A bounded wait, not a `.count()` snapshot (see fixtures/testData.ts's file header) -- the
-  // picker only renders once CreateCaseDialog's own org-discovery query resolves AND finds more
-  // than one org, both async.
-  const orgSelect = dialog.getByLabel('Org', { exact: true });
-  if (await existsWithin(page, orgSelect)) {
-    await orgSelect.click();
-    await page.getByRole('option', { name: orgName, exact: true }).click();
-  }
-
-  await dialog.getByRole('button', { name: 'Existing client' }).click();
-  const clientSelect = dialog.getByLabel('Client', { exact: true });
-  await clientSelect.click();
-  await page.getByRole('option', { name: clientName, exact: true }).click();
-
-  const caseTypeSelect = dialog.getByLabel('Case type', { exact: true });
-  await caseTypeSelect.click();
-  await page.getByRole('option', { name: 'Grievance', exact: true }).click();
-
-  await dialog.getByRole('button', { name: 'Create case', exact: true }).click();
-  await page.waitForURL(/\/cases\/[^/]+$/, { timeout: 15_000 });
-  return page.url();
-}
 
 test.describe('cases', () => {
   test('creates a case for an existing client and lands on its detail page', async ({ page }) => {

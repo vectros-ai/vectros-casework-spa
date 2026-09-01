@@ -147,6 +147,66 @@ describe('App routing', () => {
     });
   });
 
+  describe('Search — nav gating + route guard (SEARCH_ACTION reuses TEAM_ACTION, not search:r)', () => {
+    beforeEach(() => {
+      mockedClient.mockReturnValue({
+        identity: { listEntities: vi.fn().mockResolvedValue(pageOf([])) },
+        records: { lookupRecords: vi.fn().mockResolvedValue(pageOf([])) },
+        search: { content: vi.fn() },
+      } as never);
+    });
+
+    afterEach(() => {
+      __resetVectrosApiTokenCacheForTest();
+    });
+
+    it('shows the Search nav item and lets an hr-admin-shaped caller (profiles:r) reach /search', async () => {
+      const user = userEvent.setup();
+      setPartnerApiTokenMinter(async () => ({
+        token: makeScopedToken(['profiles:r'], { partnerUserId: 'usr_alice' }),
+        expiresAtMs: Date.now() + 60_000,
+      }));
+
+      render(
+        <TestProviders
+          initialEntries={['/']}
+          authOverrides={{ getCurrentUser: vi.fn().mockResolvedValue(ALICE) }}
+        >
+          <App />
+        </TestProviders>,
+      );
+
+      await screen.findByRole('heading', { name: 'Welcome' });
+      const searchLink = await screen.findByRole('link', { name: 'Search' });
+      await user.click(searchLink);
+
+      expect(await screen.findByRole('heading', { name: 'Search' })).toBeInTheDocument();
+    });
+
+    it('hides the Search nav item and redirects a case-handler-shaped caller (search:r but no profiles:r) away from /search', async () => {
+      // The exact shape that must stay denied: `search:r` alone is NOT enough — SEARCH_ACTION is
+      // deliberately `profiles:r`, not `search:r`, because both hr-admin and case-handler hold
+      // `search:r` in the blueprint (see scopeActions.ts's own comment on why a scope-action check
+      // alone can't distinguish the two roles here).
+      setPartnerApiTokenMinter(async () => ({
+        token: makeScopedToken(['search:r'], { partnerUserId: 'usr_bob' }),
+        expiresAtMs: Date.now() + 60_000,
+      }));
+
+      render(
+        <TestProviders
+          initialEntries={['/search']}
+          authOverrides={{ getCurrentUser: vi.fn().mockResolvedValue(ALICE) }}
+        >
+          <App />
+        </TestProviders>,
+      );
+
+      expect(await screen.findByRole('heading', { name: 'Welcome' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Search' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Cases — nav gating + route guard', () => {
     beforeEach(() => {
       mockedClient.mockReturnValue({

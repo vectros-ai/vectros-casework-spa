@@ -67,6 +67,7 @@ export { VectrosError, VectrosTimeoutError } from '@vectros-ai/sdk';
 type _Identity = _VectrosClient['identity'];
 type _Schemas = _VectrosClient['schemas'];
 type _Records = _VectrosClient['records'];
+type _Search = _VectrosClient['search'];
 
 /** An identity entity (id, namespace, externalId, name, status, scopes, payload, schemaId, …). */
 export type EntityResponse = Awaited<ReturnType<_Identity['getEntity']>>;
@@ -76,3 +77,9 @@ export type SchemaResponse = NonNullable<
 >[number];
 /** A single record (id, typeName, payload, status, ownership, version, …). */
 export type RecordResponse = Awaited<ReturnType<_Records['getRecord']>>;
+/** The `search.content()` response envelope (results, totalResults, searchTimeMs, degraded). */
+export type SearchResponse = Awaited<ReturnType<_Search['content']>>;
+/** A single search hit (sourceType-discriminated document/record chunk) — same shape
+ *  `app-vectros-ai`'s `SearchPage.tsx` derives, since it's the platform's own response type,
+ *  not something either app invents. */
+export type SearchResultItem = NonNullable<SearchResponse['results']>[number];

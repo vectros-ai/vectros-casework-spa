@@ -95,16 +95,15 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
-    // e2e/ (added #1110 — this app's own Playwright smoke suite, published
-    // alongside it in the public mirror) sits inside this app root, and its
-    // *.spec.ts files import @playwright/test, which isn't (and shouldn't
-    // be) an app-root devDependency. Vitest's default include glob picks up
-    // both *.test.* AND *.spec.* anywhere outside its own default excludes,
-    // so without this, `npm test`/`npm run lint`'s typecheck break in every
-    // fork the moment e2e/ exists alongside src/ — found on this branch's
-    // own PM cold-pass. Every app test uses *.test.{ts,tsx} under src/; e2e/
-    // exclusively uses *.spec.ts, so excluding it here is a clean boundary,
-    // not a narrowing of what Vitest already covered.
+    // e2e/ (this app's own Playwright smoke suite, published alongside it in
+    // the public mirror) sits inside this app root, and its *.spec.ts files
+    // import @playwright/test, which isn't (and shouldn't be) an app-root
+    // devDependency. Vitest's default include glob picks up both *.test.*
+    // AND *.spec.* anywhere outside its own default excludes, so without
+    // this, `npm test`/`npm run lint`'s typecheck break in every fork the
+    // moment e2e/ exists alongside src/. Every app test uses *.test.{ts,tsx}
+    // under src/; e2e/ exclusively uses *.spec.ts, so excluding it here is a
+    // clean boundary, not a narrowing of what Vitest already covered.
     exclude: [...configDefaults.exclude, 'e2e/**'],
     testTimeout: 20_000,
     hookTimeout: 20_000,

@@ -235,7 +235,7 @@ describe('TeamPage', () => {
     renderPage({ auth: { listAccessProfiles }, identity: {}, records: {} });
 
     await screen.findByText('No one else has been invited yet.');
-    expect(screen.getByRole('button', { name: '+ Invite' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
   });
 
   it('single-org caller: org shown read-only (not an editable picker), invite sends the auto-selected org', async () => {
@@ -253,7 +253,7 @@ describe('TeamPage', () => {
     });
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
 
     const emailField = await screen.findByLabelText(/Email/);
     await user.type(emailField, 'newbie@example.com');
@@ -308,7 +308,7 @@ describe('TeamPage', () => {
     renderPage({ auth: { listAccessProfiles }, identity: { listEntities }, records: { lookupRecords } });
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
 
     expect(await screen.findByText("Couldn't load your orgs")).toBeInTheDocument();
   });
@@ -322,7 +322,7 @@ describe('TeamPage', () => {
     renderPage({ auth: { listAccessProfiles }, identity: { listEntities }, records: { lookupRecords } });
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
 
     expect(await screen.findByText(/found one first/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Email/)).not.toBeInTheDocument();
@@ -349,7 +349,7 @@ describe('TeamPage', () => {
     });
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
 
     // Single accessible org (via membership alone) — shown read-only, same as a single founded org.
     const orgField = await screen.findByLabelText(/Org/);
@@ -371,7 +371,7 @@ describe('TeamPage', () => {
     });
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
     const emailField = await screen.findByLabelText(/Email/);
     await user.type(emailField, 'newbie@example.com');
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
@@ -406,7 +406,7 @@ describe('TeamPage', () => {
     );
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
     const emailField = await screen.findByLabelText(/Email/);
     await user.type(emailField, 'newbie@example.com');
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
@@ -443,7 +443,7 @@ describe('TeamPage', () => {
     });
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
 
     const emailField = await screen.findByLabelText(/Email/);
     await user.type(emailField, 'newbie@example.com');
@@ -476,7 +476,7 @@ describe('TeamPage', () => {
     });
 
     await screen.findByText('No one else has been invited yet.');
-    await user.click(screen.getByRole('button', { name: '+ Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
 
     await user.type(await screen.findByLabelText(/Email/), 'admin2@example.com');
     await user.click(screen.getByLabelText('Role'));

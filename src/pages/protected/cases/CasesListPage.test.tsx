@@ -445,7 +445,7 @@ describe('CasesListPage', () => {
       });
 
       await screen.findByText('You have no cases yet.');
-      expect(screen.getByRole('button', { name: '+ New case' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'New case' })).toBeDisabled();
     });
 
     it('shows the org read-only (not an editable picker) for a single-founded-org caller, and creates the client + case + folder in one flow', async () => {
@@ -466,7 +466,7 @@ describe('CasesListPage', () => {
       });
 
       await screen.findByText('You have no cases yet.');
-      await user.click(screen.getByRole('button', { name: '+ New case' }));
+      await user.click(screen.getByRole('button', { name: 'New case' }));
 
       await screen.findByRole('heading', { name: 'New case' });
       // Owner feedback 2026-08-26: a single org must still be VISIBLE (not an
@@ -529,7 +529,7 @@ describe('CasesListPage', () => {
       });
 
       await screen.findByText('You have no cases yet.');
-      await user.click(screen.getByRole('button', { name: '+ New case' }));
+      await user.click(screen.getByRole('button', { name: 'New case' }));
 
       await screen.findByRole('heading', { name: 'New case' });
       await user.type(screen.getByLabelText('Client name', { exact: false }), 'Jane Doe');
@@ -570,7 +570,7 @@ describe('CasesListPage', () => {
       });
 
       await screen.findByText('You have no cases yet.');
-      await user.click(screen.getByRole('button', { name: '+ New case' }));
+      await user.click(screen.getByRole('button', { name: 'New case' }));
       await screen.findByRole('heading', { name: 'New case' });
 
       await user.click(screen.getByRole('button', { name: 'Existing client' }));
@@ -621,7 +621,7 @@ describe('CasesListPage', () => {
       });
 
       await screen.findByText('You have no cases yet.');
-      await user.click(screen.getByRole('button', { name: '+ New case' }));
+      await user.click(screen.getByRole('button', { name: 'New case' }));
 
       const orgField = await screen.findByLabelText('Org');
       expect(orgField).toBeDisabled();
@@ -643,7 +643,7 @@ describe('CasesListPage', () => {
       });
 
       await screen.findByText('You have no cases yet.');
-      await user.click(screen.getByRole('button', { name: '+ New case' }));
+      await user.click(screen.getByRole('button', { name: 'New case' }));
 
       await screen.findByLabelText('Org');
       // Neither disabled nor pre-selected — a real choice, not a default.
@@ -664,7 +664,7 @@ describe('CasesListPage', () => {
       });
 
       await screen.findByText('You have no cases yet.');
-      await user.click(screen.getByRole('button', { name: '+ New case' }));
+      await user.click(screen.getByRole('button', { name: 'New case' }));
       await user.type(screen.getByLabelText('Client name', { exact: false }), 'Jane Doe');
       await user.click(screen.getByLabelText('Case type'));
       await user.click(await screen.findByRole('option', { name: 'Onboarding' }));

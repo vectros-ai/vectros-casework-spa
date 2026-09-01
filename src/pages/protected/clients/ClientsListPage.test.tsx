@@ -149,7 +149,7 @@ describe('ClientsListPage', () => {
     renderPage(singleOrgClient());
 
     await screen.findByText('No clients yet — create one to get started.');
-    expect(screen.getByRole('button', { name: '+ Create client' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create client' })).toBeDisabled();
   });
 
   it('creates a client scoped to the selected org with the schema-driven payload, then closes the dialog', async () => {
@@ -170,7 +170,7 @@ describe('ClientsListPage', () => {
     });
 
     await screen.findByText('No clients yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create client' }));
+    await user.click(screen.getByRole('button', { name: 'Create client' }));
 
     await user.type(await screen.findByLabelText(/Client name/), 'Jane Doe');
     await user.click(screen.getByRole('button', { name: 'Create client' }));
@@ -207,7 +207,7 @@ describe('ClientsListPage', () => {
     });
 
     await screen.findByText('No clients yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create client' }));
+    await user.click(screen.getByRole('button', { name: 'Create client' }));
     await user.type(await screen.findByLabelText(/Client name/), 'Jane Doe');
     await user.click(screen.getByRole('button', { name: 'Create client' }));
 
@@ -240,7 +240,7 @@ describe('ClientsListPage', () => {
     renderPage({ identity: { listEntities }, records: { lookupRecords }, schemas: { listSchemas } });
 
     await screen.findByText('No clients yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create client' }));
+    await user.click(screen.getByRole('button', { name: 'Create client' }));
 
     await screen.findByLabelText(/Client name/);
     expect(screen.queryByText('This field is required.')).not.toBeInTheDocument();
@@ -275,7 +275,7 @@ describe('ClientsListPage', () => {
     );
 
     await screen.findByText('No clients yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create client' }));
+    await user.click(screen.getByRole('button', { name: 'Create client' }));
     await user.type(await screen.findByLabelText(/Client name/), 'Jane Doe');
     await user.click(screen.getByRole('button', { name: 'Create client' }));
 

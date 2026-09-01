@@ -25,7 +25,7 @@ import globals from 'globals';
 
 export default tseslint.config(
   {
-    // e2e/ (added #1110) is a SEPARATE npm project — its own package.json,
+    // e2e/ is a SEPARATE npm project — its own package.json,
     // its own devDependencies (@playwright/test) not installed at this
     // app's root — so this config's rules don't apply to it and shouldn't
     // try to. Lint it from inside e2e/ itself if it ever needs its own

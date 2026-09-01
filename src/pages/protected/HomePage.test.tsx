@@ -51,7 +51,7 @@ describe('HomePage', () => {
     // that a plain `findByText` would pass regardless of, matching how the error test below
     // checks its own.
     const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent(/vectros partner-api token was minted successfully/i);
+    expect(status).toHaveTextContent(/vectros api token was minted successfully/i);
   });
 
   it('shows an error message (with the underlying detail) when the token mint fails', async () => {

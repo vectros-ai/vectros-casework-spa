@@ -26,3 +26,14 @@ export const TEAM_ACTION = 'profiles:r';
  *  SEES once inside is a separate, narrower question `useAccessibleClients`
  *  answers per-role. */
 export const CLIENTS_ACTION = 'entities:c:client';
+/** The scope-action gating the Search nav item and route. Deliberately NOT `search:r` itself —
+ *  both `hr-admin` and `case-handler` hold that in `casework.blueprint.yaml`'s `allowedActions`,
+ *  so it can't distinguish them. The actual blocker is `case-handler`'s `search:r` `dataScope`
+ *  needing BOTH `scope:org` AND `scope:client`, which the search API's single-string caller-filter
+ *  can't express (the same platform-side limitation `CaseAskPanel`'s header comment documents for
+ *  Ask) — so a `case-handler` reaching this screen would only ever see a 403, not real results.
+ *  Reusing `TEAM_ACTION` here is the same hr-admin-exclusive proxy that constant's own comment
+ *  already relies on (only `hr-admin` holds any `profiles:*` grant) — not because Search relates
+ *  to Team. Swap to a real `search:r`-based gate once that platform-side limitation is fixed and
+ *  `case-handler`'s search calls actually succeed. */
+export const SEARCH_ACTION = TEAM_ACTION;

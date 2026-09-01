@@ -149,7 +149,7 @@ describe('OrgsListPage', () => {
     renderPage({ identity: { listEntities }, schemas: { listSchemas: vi.fn() } });
 
     await screen.findByText('No orgs yet — create one to get started.');
-    expect(screen.getByRole('button', { name: '+ Create org' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create org' })).toBeDisabled();
   });
 
   it('creates an org with the entered name and schema-driven payload, then closes the dialog', async () => {
@@ -179,7 +179,7 @@ describe('OrgsListPage', () => {
     });
 
     await screen.findByText('No orgs yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create org' }));
+    await user.click(screen.getByRole('button', { name: 'Create org' }));
 
     const nameField = await screen.findByLabelText(/Org name/);
     await user.type(nameField, 'Acme Corp');
@@ -215,7 +215,7 @@ describe('OrgsListPage', () => {
     renderPage({ identity: { listEntities, createEntity }, schemas: { listSchemas } });
 
     await screen.findByText('No orgs yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create org' }));
+    await user.click(screen.getByRole('button', { name: 'Create org' }));
     await user.type(await screen.findByLabelText(/Org name/), 'Acme Corp');
     await user.click(screen.getByRole('button', { name: 'Create org' }));
 
@@ -248,7 +248,7 @@ describe('OrgsListPage', () => {
     renderPage({ identity: { listEntities }, schemas: { listSchemas } });
 
     await screen.findByText('No orgs yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create org' }));
+    await user.click(screen.getByRole('button', { name: 'Create org' }));
 
     await screen.findByLabelText(/Org name/);
     expect(screen.queryByText('This field is required.')).not.toBeInTheDocument();
@@ -265,7 +265,7 @@ describe('OrgsListPage', () => {
     renderPage({ identity: { listEntities }, schemas: { listSchemas } });
 
     await screen.findByText('No orgs yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create org' }));
+    await user.click(screen.getByRole('button', { name: 'Create org' }));
 
     expect(await screen.findByText("Couldn't load the org profile fields")).toBeInTheDocument();
   });
@@ -284,7 +284,7 @@ describe('OrgsListPage', () => {
     });
 
     await screen.findByText('No orgs yet — create one to get started.');
-    await user.click(screen.getByRole('button', { name: '+ Create org' }));
+    await user.click(screen.getByRole('button', { name: 'Create org' }));
     await user.type(await screen.findByLabelText(/Org name/), 'Acme Corp');
     await user.click(screen.getByRole('button', { name: 'Create org' }));
 

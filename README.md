@@ -28,6 +28,9 @@ differently; this is the first one published.
 - A chat-style "Ask" panel grounded on a case's own notes and documents (full access for
   `hr-admin`; `case-handler`'s access is still blocked on a platform-side scope limitation, see
   `CaseAskPanel.tsx`'s header comment)
+- Hybrid search across cases, case entries, and case documents (`hr-admin` only for now — see
+  `SearchPage.tsx`'s header comment for why `case-handler`'s access is still blocked on the same
+  platform-side limitation as Ask, above)
 - Every list paginated through to the end, not just the first page
 
 ## Why no backend?
@@ -67,6 +70,12 @@ Vectros API host once you have them from steps 2-3 below — see `.env.example` 
 variable means. Needed before `npm run dev` will start (`src/config.ts` fails fast at module load
 on a missing value); not needed for step 4's Vercel deploy, which reads the same values from the
 Vercel dashboard's own environment variables instead.
+
+> [!NOTE]
+> Some npm 10.x versions crash on `npm install` with `Cannot read properties of null (reading
+> 'edgesOut')` while resolving Vitest's own optional peer dependencies — a known, still-open npm
+> bug ([npm/cli#9787](https://github.com/npm/cli/issues/9787)), not a real conflict in this
+> app's dependencies. If you hit it, `npm install --legacy-peer-deps` installs cleanly.
 
 **2. Set up Auth0** — a tenant, an application, an API, and the (easy-to-miss) step that
 authorizes one for the other. Full walkthrough: [`docs/AUTH0-SETUP.md`](docs/AUTH0-SETUP.md).
@@ -126,9 +135,9 @@ platform enforces the isolation either way, not the agent.
 
 ## Smoke testing
 
-A Playwright smoke suite exercising this app end to end (sign-in, orgs, clients, cases, and the
-team/invite flow) ships alongside this app in an `e2e/` directory, pointed at your own test
-credentials instead of ours. Run it with `e2e/run.sh` against a local dev server or your own
+A Playwright smoke suite exercising this app end to end (sign-in, orgs, clients, cases, search,
+and the team/invite flow) ships alongside this app in an `e2e/` directory, pointed at your own
+test credentials instead of ours. Run it with `e2e/run.sh` against a local dev server or your own
 deployed instance. It isn't wired into CI as an automated regression gate yet; that's tracked
 separately.
 
