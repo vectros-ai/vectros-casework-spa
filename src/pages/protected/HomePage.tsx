@@ -55,7 +55,7 @@ export function HomePage(): React.JSX.Element {
     null,
   );
 
-  const myUserId = identity.partnerUserId;
+  const myUserId = identity.userId;
   const hasUserId = typeof myUserId === 'string' && myUserId !== '';
   const canReachCases = canPerformAction(CASES_ACTION);
   // The org-FOUNDING action, not just "can read an org" — this is what gates

@@ -44,7 +44,7 @@ const mockedClient = vi.mocked(vectrosApiClient);
 const NO_CREATE_GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['records:r:case'],
-  identity: { partnerUserId: 'usr_alice' },
+  identity: { userId: 'usr_alice' },
   can: () => false,
 };
 
@@ -124,9 +124,17 @@ describe('CasesListPage', () => {
     // fan-out uses `useAccessibleOrgs`, which unions in orgs discovered via the caller's own
     // `org_membership` rows — this pins that case-handler still sees cases through THAT path.
     const listEntities = vi.fn().mockResolvedValue(pageOf([])); // never a founder
-    const lookupRecords = vi.fn().mockResolvedValue(
-      pageOf([{ id: 'mem_1', scopes: ['org:org_1'], payload: { targetUserId: 'usr_alice', level: 'member' } }]),
-    );
+    const lookupRecords = vi
+      .fn()
+      .mockResolvedValue(
+        pageOf([
+          {
+            id: 'mem_1',
+            scopes: ['org:org_1'],
+            payload: { targetUserId: 'usr_alice', level: 'member' },
+          },
+        ]),
+      );
     const getEntity = vi.fn().mockResolvedValue({ id: 'org_1', name: 'Membership Org' });
     const listRecords = listRecordsByOrg([CASE_1]);
     renderPage({ records: { listRecords, lookupRecords }, identity: { listEntities, getEntity } });
@@ -163,7 +171,10 @@ describe('CasesListPage', () => {
       'href',
       '/cases/case_1',
     );
-    expect(screen.getByRole('link', { name: 'Onboarding' })).toHaveAttribute('href', '/cases/case_2');
+    expect(screen.getByRole('link', { name: 'Onboarding' })).toHaveAttribute(
+      'href',
+      '/cases/case_2',
+    );
     expect(screen.getByText('open')).toBeInTheDocument();
     expect(screen.getByText('closed')).toBeInTheDocument();
     expect(screen.getByText('2026-08-01')).toBeInTheDocument();
@@ -183,9 +194,12 @@ describe('CasesListPage', () => {
 
   it('shows a resolved org-name column when cases span more than one org, reusing accessibleOrgs -- no redundant getEntity fetch', async () => {
     const multiOrgCase = { ...CASE_2, scopes: ['org:org_2', 'client:client_2'] };
-    const listEntities = vi
-      .fn()
-      .mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }, { id: 'org_2', name: 'Beta LLC Inc' }]));
+    const listEntities = vi.fn().mockResolvedValue(
+      pageOf([
+        { id: 'org_1', name: 'Acme Inc' },
+        { id: 'org_2', name: 'Beta LLC Inc' },
+      ]),
+    );
     const listRecords = listRecordsByOrg([CASE_1, multiOrgCase]);
     const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
     const getEntity = vi.fn();
@@ -217,7 +231,11 @@ describe('CasesListPage', () => {
     await user.click(screen.getByRole('button', { name: 'Open' }));
 
     expect(await screen.findByText('Outside Org')).toBeInTheDocument();
-    expect(getEntity).toHaveBeenCalledWith({ namespace: 'org', id: 'org_9', contextId: 'casework' });
+    expect(getEntity).toHaveBeenCalledWith({
+      namespace: 'org',
+      id: 'org_9',
+      contextId: 'casework',
+    });
     // org_1 is already known from accessibleOrgs.orgs -- only the unknown org_9 gets fetched.
     expect(getEntity).toHaveBeenCalledTimes(1);
   });
@@ -241,7 +259,7 @@ describe('CasesListPage', () => {
     );
   });
 
-  it('follows nextCursor to fetch every page of a single-status filter, not just the \'all\' fan-out', async () => {
+  it("follows nextCursor to fetch every page of a single-status filter, not just the 'all' fan-out", async () => {
     // The sibling "follows nextCursor..." test above only
     // covers the 'all' branch's fetchAllCasesForOrg -- every OTHER test in this file mocks
     // lookupRecords with a single FINAL page via pageOf, so the single-status branch's own
@@ -279,7 +297,11 @@ describe('CasesListPage', () => {
 
     expect(await screen.findByRole('link', { name: 'Accommodation' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Investigation' })).toBeInTheDocument();
-    expect(lookupRecords).toHaveBeenCalledWith({ type: 'case', field: 'status,assignedTo', values: ['open'] });
+    expect(lookupRecords).toHaveBeenCalledWith({
+      type: 'case',
+      field: 'status,assignedTo',
+      values: ['open'],
+    });
     expect(lookupRecords).toHaveBeenCalledWith({
       type: 'case',
       field: 'status,assignedTo',
@@ -324,7 +346,7 @@ describe('CasesListPage', () => {
     expect(listRecords).not.toHaveBeenCalled();
   });
 
-  it('follows nextCursor to fetch every page of a single org\'s cases', async () => {
+  it("follows nextCursor to fetch every page of a single org's cases", async () => {
     // Regression guard: listRecords defaults to a 20-record page; a single un-paged call per org
     // would silently drop any org's cases past its first page.
     const listEntities = founderOfOneOrg();
@@ -338,7 +360,11 @@ describe('CasesListPage', () => {
     await screen.findByRole('link', { name: 'Grievance' });
     expect(screen.getByRole('link', { name: 'Onboarding' })).toBeInTheDocument();
     expect(listRecords).toHaveBeenNthCalledWith(1, { type: 'case', scope: 'org:org_1' });
-    expect(listRecords).toHaveBeenNthCalledWith(2, { type: 'case', scope: 'org:org_1', startFrom: 'cursor_2' });
+    expect(listRecords).toHaveBeenNthCalledWith(2, {
+      type: 'case',
+      scope: 'org:org_1',
+      startFrom: 'cursor_2',
+    });
   });
 
   it('shows cases from orgs that succeeded plus a warning, when one org among several fails', async () => {
@@ -346,15 +372,20 @@ describe('CasesListPage', () => {
     // error, even though the other orgs' calls succeeded. Promise.allSettled must still surface
     // the successful orgs' cases, with a non-blocking warning naming the failure.
     const orgCase2 = { ...CASE_2, scopes: ['org:org_2', 'client:client_2'] };
-    const listEntities = vi
-      .fn()
-      .mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }, { id: 'org_2', name: 'Beta LLC Inc' }]));
-    const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
-    const listRecords = vi.fn().mockImplementation(({ scope }: { scope: string }) =>
-      scope === 'org:org_1'
-        ? Promise.reject(new Error('org_1 down'))
-        : Promise.resolve(pageOf([orgCase2])),
+    const listEntities = vi.fn().mockResolvedValue(
+      pageOf([
+        { id: 'org_1', name: 'Acme Inc' },
+        { id: 'org_2', name: 'Beta LLC Inc' },
+      ]),
     );
+    const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
+    const listRecords = vi
+      .fn()
+      .mockImplementation(({ scope }: { scope: string }) =>
+        scope === 'org:org_1'
+          ? Promise.reject(new Error('org_1 down'))
+          : Promise.resolve(pageOf([orgCase2])),
+      );
     renderPage({ records: { listRecords, lookupRecords }, identity: { listEntities } });
 
     expect(await screen.findByRole('link', { name: 'Onboarding' })).toBeInTheDocument();
@@ -373,9 +404,12 @@ describe('CasesListPage', () => {
       payload: { caseType: 'onboarding', status: 'open', openedAt: '2026-08-02' },
       scopes: ['org:org_2', 'client:client_3'],
     };
-    const listEntities = vi
-      .fn()
-      .mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }, { id: 'org_2', name: 'Beta LLC Inc' }]));
+    const listEntities = vi.fn().mockResolvedValue(
+      pageOf([
+        { id: 'org_1', name: 'Acme Inc' },
+        { id: 'org_2', name: 'Beta LLC Inc' },
+      ]),
+    );
     const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
     // Fan-out queries org_1 before org_2 (myOrgIds order), so the later-opened org_1 case would
     // land first in the merged array if nothing re-sorted it.
@@ -399,12 +433,18 @@ describe('CasesListPage', () => {
     qc.setQueryData(['cases', 'all'], { data: [CASE_1], failedOrgCount: 0 });
 
     const orgCase2 = { ...CASE_2, scopes: ['org:org_2', 'client:client_2'] };
-    const listEntities = vi
-      .fn()
-      .mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }, { id: 'org_2', name: 'Beta LLC Inc' }]));
+    const listEntities = vi.fn().mockResolvedValue(
+      pageOf([
+        { id: 'org_1', name: 'Acme Inc' },
+        { id: 'org_2', name: 'Beta LLC Inc' },
+      ]),
+    );
     const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
     const listRecords = listRecordsByOrg([CASE_1, orgCase2]);
-    mockedClient.mockReturnValue({ records: { listRecords, lookupRecords }, identity: { listEntities } } as never);
+    mockedClient.mockReturnValue({
+      records: { listRecords, lookupRecords },
+      identity: { listEntities },
+    } as never);
     render(
       <IntlProvider>
         <QueryClientProvider client={qc}>
@@ -428,11 +468,11 @@ describe('CasesListPage', () => {
     const CREATE_GATE: ScopeGateValue = {
       loading: false,
       allowedActions: ['records:c:case'],
-      identity: { partnerUserId: 'usr_alice' },
+      identity: { userId: 'usr_alice' },
       can: (a) => a === 'records:c:case',
     };
 
-    it('is disabled (not hidden) without records:c:case, matching every other list page\'s create-button pattern', async () => {
+    it("is disabled (not hidden) without records:c:case, matching every other list page's create-button pattern", async () => {
       // Was hidden entirely; changed to disabled + tooltip to match Orgs/Clients/Team, which
       // all already used the more informative pattern -- explaining WHY, not just omitting
       // the affordance.
@@ -455,14 +495,25 @@ describe('CasesListPage', () => {
       const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
       const listEntities = vi.fn().mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }]));
       const createEntity = vi.fn().mockResolvedValue({ id: 'client_new', name: 'Jane Doe' });
-      const createRecord = vi
+      // createCase now composes folder + case into ONE script execution.
+      // Echoes the externalId it was SENT, as the real script does; createCase
+      // refuses a mismatch, so a fixed literal would fail for the wrong reason.
+      const executeScript = vi
         .fn()
-        .mockResolvedValue({ id: 'case_new', scopes: ['org:org_1', 'client:client_new'] });
-      const createFolder = vi.fn().mockResolvedValue({ id: 'folder_1', name: 'Grievance' });
+        .mockImplementation((req: { input: { caseExternalId: string } }) =>
+          Promise.resolve({
+            result: {
+              caseId: 'case_new',
+              caseExternalId: req.input.caseExternalId,
+              folderId: 'folder_1',
+            },
+            execution: { status: 'SUCCEEDED' },
+          }),
+        );
       renderPage({
-        records: { listRecords, lookupRecords, createRecord },
+        records: { listRecords, lookupRecords },
         identity: { getEntity: vi.fn(), listEntities, createEntity },
-        folders: { createFolder },
+        scripts: { executeScript },
       });
 
       await screen.findByText('You have no cases yet.');
@@ -480,27 +531,121 @@ describe('CasesListPage', () => {
       await user.click(await screen.findByRole('option', { name: 'Grievance' }));
       await user.click(screen.getByRole('button', { name: 'Create case' }));
 
-      await waitFor(() => expect(createRecord).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(executeScript).toHaveBeenCalledTimes(1));
       expect(createEntity).toHaveBeenCalledWith({
         namespace: 'client',
         contextId: 'casework',
         body: expect.objectContaining({ name: 'Jane Doe', scopes: ['org:org_1'] }),
       });
-      expect(createRecord).toHaveBeenCalledWith({
-        body: expect.objectContaining({
-          typeName: 'case',
-          scopes: ['org:org_1', 'client:client_new'],
-          payload: expect.objectContaining({ caseType: 'grievance', status: 'open' }),
+      expect(executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scriptRef: { name: 'create-case', version: 'latest' },
+          input: expect.objectContaining({
+            caseType: 'grievance',
+            folderName: 'Grievance',
+            scopes: ['org:org_1', 'client:client_new'],
+          }),
         }),
-      });
-      expect(createFolder).toHaveBeenCalledWith({
-        body: expect.objectContaining({
-          name: 'Grievance',
-          scopes: ['org:org_1', 'client:client_new'],
-        }),
-      });
+      );
       // Navigates to the new case on success.
       expect(await screen.findByText('case detail page')).toBeInTheDocument();
+    });
+
+    it('IDEMPOTENCY: the same values carry ONE identity, even after the form is edited and put back', async () => {
+      // The mechanism lives HERE, not in createCase — which is a pure function of the submissionId
+      // it is handed, so mutating createCase cannot falsify how that id is PRODUCED.
+      //
+      // What these two cells pin is that the identity is derived from the submission's CONTENT
+      // under a nonce the parent replaces only on success. That is the property, and it is what
+      // makes the identity survive the dialog closing: `handleClose` clears every field and is
+      // wired to the Dialog's own `onClose`, so Escape and a backdrop click reach it — a caller who
+      // dismisses a failed submit, reopens and retypes the same values is retrying, and must not
+      // mint a second client, case and folder. An earlier version keyed on component state and was
+      // defeated by exactly that gesture. Edit-and-revert is the same property, without the modal
+      // remount that makes a reopen assertion fight the test harness rather than the code.
+      mockedUseScopeGate.mockReturnValue(CREATE_GATE);
+      const user = userEvent.setup();
+      const listRecords = vi.fn().mockResolvedValue(pageOf([]));
+      const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
+      const listEntities = vi.fn().mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }]));
+      const createEntity = vi.fn().mockResolvedValue({ id: 'client_new', name: 'Jane Doe' });
+      const executeScript = vi.fn().mockRejectedValue(new Error('gateway blew up'));
+      renderPage({
+        records: { listRecords, lookupRecords },
+        identity: { getEntity: vi.fn(), listEntities, createEntity },
+        scripts: { executeScript },
+      });
+
+      await screen.findByText('You have no cases yet.');
+      await user.click(screen.getByRole('button', { name: 'New case' }));
+      await screen.findByRole('heading', { name: 'New case' });
+      const nameField = screen.getByLabelText('Client name', { exact: false });
+      await user.type(nameField, 'Jane Doe');
+      await user.click(screen.getByLabelText('Case type'));
+      await user.click(await screen.findByRole('option', { name: 'Grievance' }));
+      await user.click(screen.getByRole('button', { name: 'Create case' }));
+      await waitFor(() => expect(executeScript).toHaveBeenCalledTimes(1));
+      await screen.findByRole('alert');
+
+      // Churn the form and put it back exactly as it was, then retry.
+      await user.clear(nameField);
+      await user.type(nameField, 'Someone Else');
+      await user.clear(nameField);
+      await user.type(nameField, 'Jane Doe');
+      await user.click(screen.getByRole('button', { name: 'Create case' }));
+      await waitFor(() => expect(executeScript).toHaveBeenCalledTimes(2));
+
+      const keys = executeScript.mock.calls.map(
+        (c) => (c[0] as Record<string, unknown>)['Idempotency-Key'],
+      );
+      expect(keys[0]).toBe(keys[1]);
+      const caseIds = executeScript.mock.calls.map(
+        (c) => (c[0] as { input: { caseExternalId: string } }).input.caseExternalId,
+      );
+      expect(caseIds[0]).toBe(caseIds[1]);
+      const clientIds = createEntity.mock.calls.map(
+        (c) => (c[0] as { body: { externalId: string } }).body.externalId,
+      );
+      expect(clientIds[0]).toBe(clientIds[1]);
+    });
+
+    it('IDEMPOTENCY: DIFFERENT values are a different submission, and get a different key', async () => {
+      // The other direction, and it is load-bearing: without it the cell above is satisfied by a
+      // hard-coded constant, and an edited form would collide with a used key (the platform
+      // compares a keyed request byte for byte and refuses a changed body) instead of creating.
+      mockedUseScopeGate.mockReturnValue(CREATE_GATE);
+      const user = userEvent.setup();
+      const listRecords = vi.fn().mockResolvedValue(pageOf([]));
+      const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
+      const listEntities = vi.fn().mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }]));
+      const createEntity = vi.fn().mockResolvedValue({ id: 'client_new' });
+      const executeScript = vi.fn().mockRejectedValue(new Error('nope'));
+      renderPage({
+        records: { listRecords, lookupRecords },
+        identity: { getEntity: vi.fn(), listEntities, createEntity },
+        scripts: { executeScript },
+      });
+
+      await screen.findByText('You have no cases yet.');
+      await user.click(screen.getByRole('button', { name: 'New case' }));
+      await screen.findByRole('heading', { name: 'New case' });
+      const nameField = screen.getByLabelText('Client name', { exact: false });
+      await user.type(nameField, 'Jane Doe');
+      await user.click(screen.getByLabelText('Case type'));
+      await user.click(await screen.findByRole('option', { name: 'Grievance' }));
+      await user.click(screen.getByRole('button', { name: 'Create case' }));
+      await waitFor(() => expect(executeScript).toHaveBeenCalledTimes(1));
+      await screen.findByRole('alert');
+
+      await user.clear(nameField);
+      await user.type(nameField, 'John Roe');
+      await user.click(screen.getByRole('button', { name: 'Create case' }));
+      await waitFor(() => expect(executeScript).toHaveBeenCalledTimes(2));
+
+      const keys = executeScript.mock.calls.map(
+        (c) => (c[0] as Record<string, unknown>)['Idempotency-Key'],
+      );
+      expect(keys[0]).not.toBe(keys[1]);
     });
 
     it('disables every form field while the create mutation is in flight', async () => {
@@ -514,18 +659,21 @@ describe('CasesListPage', () => {
       const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
       const listEntities = vi.fn().mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }]));
       const createEntity = vi.fn().mockResolvedValue({ id: 'client_new', name: 'Jane Doe' });
-      let resolveCreate!: (value: { id: string; scopes: string[] }) => void;
-      const createRecord = vi.fn(
-        () =>
+      let resolveCreate!: (value: {
+        result: { caseId: string; caseExternalId: string; folderId: string };
+      }) => void;
+      let sentExternalId = '';
+      const executeScript = vi.fn(
+        (req: { input: { caseExternalId: string } }) =>
           new Promise((resolve) => {
+            sentExternalId = req.input.caseExternalId;
             resolveCreate = resolve;
           }),
       );
-      const createFolder = vi.fn().mockResolvedValue({ id: 'folder_1', name: 'Grievance' });
       renderPage({
-        records: { listRecords, lookupRecords, createRecord },
+        records: { listRecords, lookupRecords },
         identity: { getEntity: vi.fn(), listEntities, createEntity },
-        folders: { createFolder },
+        scripts: { executeScript },
       });
 
       await screen.findByText('You have no cases yet.');
@@ -537,12 +685,14 @@ describe('CasesListPage', () => {
       await user.click(await screen.findByRole('option', { name: 'Grievance' }));
       await user.click(screen.getByRole('button', { name: 'Create case' }));
 
-      await waitFor(() => expect(createRecord).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(executeScript).toHaveBeenCalledTimes(1));
       expect(screen.getByLabelText('Client name', { exact: false })).toBeDisabled();
       expect(screen.getByLabelText('Case type')).toHaveAttribute('aria-disabled', 'true');
       expect(screen.getByLabelText('Folder name', { exact: false })).toBeDisabled();
 
-      resolveCreate({ id: 'case_new', scopes: ['org:org_1', 'client:client_new'] });
+      resolveCreate({
+        result: { caseId: 'case_new', caseExternalId: sentExternalId, folderId: 'folder_1' },
+      });
     });
 
     it('switches to the existing-client picker and creates the case for the selected client (no new entity)', async () => {
@@ -550,23 +700,35 @@ describe('CasesListPage', () => {
       const user = userEvent.setup();
       const listRecords = vi.fn().mockResolvedValue(pageOf([]));
       const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
-      const listEntities = vi.fn().mockImplementation(({ namespace }: { namespace: string }) =>
-        namespace === 'org'
-          ? Promise.resolve(pageOf([{ id: 'org_1', name: 'Acme Inc' }]))
-          : Promise.resolve(pageOf([{ id: 'client_9', name: 'Returning Employee' }])),
-      );
+      const listEntities = vi
+        .fn()
+        .mockImplementation(({ namespace }: { namespace: string }) =>
+          namespace === 'org'
+            ? Promise.resolve(pageOf([{ id: 'org_1', name: 'Acme Inc' }]))
+            : Promise.resolve(pageOf([{ id: 'client_9', name: 'Returning Employee' }])),
+        );
       const createEntity = vi.fn();
       // The "existing client" path resolves the SELECTED client by id (no list/create) —
       // see createCase.ts's `input.clientId` branch.
       const getEntity = vi.fn().mockResolvedValue({ id: 'client_9', name: 'Returning Employee' });
-      const createRecord = vi
+      // Echoes the externalId it was SENT, as the real script does; createCase
+      // refuses a mismatch, so a fixed literal would fail for the wrong reason.
+      const executeScript = vi
         .fn()
-        .mockResolvedValue({ id: 'case_new', scopes: ['org:org_1', 'client:client_9'] });
-      const createFolder = vi.fn().mockResolvedValue({ id: 'folder_1', name: 'Onboarding' });
+        .mockImplementation((req: { input: { caseExternalId: string } }) =>
+          Promise.resolve({
+            result: {
+              caseId: 'case_new',
+              caseExternalId: req.input.caseExternalId,
+              folderId: 'folder_1',
+            },
+            execution: { status: 'SUCCEEDED' },
+          }),
+        );
       renderPage({
-        records: { listRecords, lookupRecords, createRecord },
+        records: { listRecords, lookupRecords },
         identity: { getEntity, listEntities, createEntity },
-        folders: { createFolder },
+        scripts: { executeScript },
       });
 
       await screen.findByText('You have no cases yet.');
@@ -580,17 +742,16 @@ describe('CasesListPage', () => {
       await user.click(await screen.findByRole('option', { name: 'Onboarding' }));
       await user.click(screen.getByRole('button', { name: 'Create case' }));
 
-      await waitFor(() => expect(createRecord).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(executeScript).toHaveBeenCalledTimes(1));
       expect(createEntity).not.toHaveBeenCalled();
-      expect(createRecord).toHaveBeenCalledWith({
-        body: expect.objectContaining({
-          typeName: 'case',
-          scopes: ['org:org_1', 'client:client_9'],
+      // The selected client's compartment travels on the composed call, not on
+      // two separate writes.
+      expect(executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scriptRef: { name: 'create-case', version: 'latest' },
+          input: expect.objectContaining({ scopes: ['org:org_1', 'client:client_9'] }),
         }),
-      });
-      expect(createFolder).toHaveBeenCalledWith({
-        body: expect.objectContaining({ scopes: ['org:org_1', 'client:client_9'] }),
-      });
+      );
     });
 
     it('a case-handler with no founded org still sees the org picker via org_membership discovery', async () => {
@@ -609,7 +770,13 @@ describe('CasesListPage', () => {
         .mockImplementation(({ type }: { type: string }) =>
           type === 'org_membership'
             ? Promise.resolve(
-                pageOf([{ id: 'mem_1', scopes: ['org:org_7'], payload: { targetUserId: 'usr_alice', level: 'member' } }]),
+                pageOf([
+                  {
+                    id: 'mem_1',
+                    scopes: ['org:org_7'],
+                    payload: { targetUserId: 'usr_alice', level: 'member' },
+                  },
+                ]),
               )
             : Promise.resolve(pageOf([])),
         );
@@ -626,7 +793,11 @@ describe('CasesListPage', () => {
       const orgField = await screen.findByLabelText('Org');
       expect(orgField).toBeDisabled();
       expect(orgField).toHaveValue('Membership Org');
-      expect(getEntity).toHaveBeenCalledWith({ namespace: 'org', id: 'org_7', contextId: 'casework' });
+      expect(getEntity).toHaveBeenCalledWith({
+        namespace: 'org',
+        id: 'org_7',
+        contextId: 'casework',
+      });
     });
 
     it('shows an org picker (required) when the caller founded more than one org', async () => {
@@ -634,9 +805,12 @@ describe('CasesListPage', () => {
       const user = userEvent.setup();
       const listRecords = vi.fn().mockResolvedValue(pageOf([]));
       const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
-      const listEntities = vi
-        .fn()
-        .mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme' }, { id: 'org_2', name: 'Globex' }]));
+      const listEntities = vi.fn().mockResolvedValue(
+        pageOf([
+          { id: 'org_1', name: 'Acme' },
+          { id: 'org_2', name: 'Globex' },
+        ]),
+      );
       renderPage({
         records: { listRecords, lookupRecords },
         identity: { getEntity: vi.fn(), listEntities },
@@ -657,10 +831,15 @@ describe('CasesListPage', () => {
       const lookupRecords = vi.fn().mockResolvedValue(pageOf([])); // useAccessibleOrgs's org_membership discovery
       const listEntities = vi.fn().mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme' }]));
       const createEntity = vi.fn().mockResolvedValue({ id: 'client_new' });
-      const createRecord = vi.fn().mockRejectedValue(new Error('boom'));
+      // Reject the EXECUTION — the single write createCase now makes. Stubbing
+      // createRecord here would leave executeScript unstubbed, and the cell would
+      // still show the alert (via the "no case id" guard) while testing nothing
+      // about a failed create.
+      const executeScript = vi.fn().mockRejectedValue(new Error('boom'));
       renderPage({
-        records: { listRecords, lookupRecords, createRecord },
+        records: { listRecords, lookupRecords },
         identity: { getEntity: vi.fn(), listEntities, createEntity },
+        scripts: { executeScript },
       });
 
       await screen.findByText('You have no cases yet.');

@@ -48,6 +48,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -76,7 +77,7 @@ function metaString(meta: Record<string, unknown> | undefined, key: string): str
 export function SearchPage(): React.JSX.Element {
   const intl = useIntl();
   const { identity } = useScopeGate();
-  const myUserId = identity.partnerUserId;
+  const myUserId = identity.userId;
   const hasUserId = typeof myUserId === 'string' && myUserId !== '';
 
   const [queryInput, setQueryInput] = useState('');
@@ -115,8 +116,34 @@ export function SearchPage(): React.JSX.Element {
 
   const handleSubmit = (event: React.FormEvent): void => {
     event.preventDefault();
-    setSubmittedQuery(queryInput.trim());
+    const next = queryInput.trim();
+    // Re-submitting the SAME term leaves the query key unchanged, so react-query serves the cached
+    // pages and issues no request. Indexing is asynchronous, so a search run in the seconds before a
+    // just-added entry is indexed would otherwise stay empty until the cache expired. Refetch
+    // explicitly. `effectiveOrgId` is checked because the query is `enabled` on it too: `refetch()`
+    // runs even on a disabled query, which would send `scope: "org:"` for a caller who submitted
+    // before picking an org, and the render ladder below would show the pick-an-org prompt rather
+    // than the resulting error.
+    if (next !== '' && next === submittedQuery && effectiveOrgId !== '') {
+      void searchQuery.refetch();
+      return;
+    }
+    setSubmittedQuery(next);
   };
+
+  // Offered wherever a submitted search is on screen -- including the empty and error states, which
+  // are where a caller most needs it (nothing found yet, or a request that failed outright).
+  const refreshButton = (
+    <IconButton
+      size="small"
+      onClick={() => void searchQuery.refetch()}
+      disabled={searchQuery.isFetching}
+      aria-label={intl.formatMessage({ id: 'search.refresh' })}
+      title={intl.formatMessage({ id: 'search.refresh' })}
+    >
+      <RefreshIcon fontSize="small" />
+    </IconButton>
+  );
 
   const pages = searchQuery.data?.pages ?? [];
   const results: ReadonlyArray<SearchResultItem> = pages.flatMap((p) => p.results ?? []);
@@ -216,18 +243,21 @@ export function SearchPage(): React.JSX.Element {
       ) : orgDiscoveryFailed ? null : searchQuery.isPending ? (
         <LoadingBlock label={intl.formatMessage({ id: 'search.loading' })} />
       ) : searchQuery.isError ? (
-        <ApiErrorAlert error={searchQuery.error}>
+        <ApiErrorAlert error={searchQuery.error} action={refreshButton}>
           <FormattedMessage id="search.error" />
         </ApiErrorAlert>
       ) : results.length === 0 ? (
-        <Alert severity="info">
+        <Alert severity="info" action={refreshButton}>
           <FormattedMessage id="search.empty" values={{ query: submittedQuery }} />
         </Alert>
       ) : (
         <Stack spacing={2}>
-          <Typography variant="body2" color="text.secondary">
-            <FormattedMessage id="search.resultCount" values={{ count: totalResults }} />
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              <FormattedMessage id="search.resultCount" values={{ count: totalResults }} />
+            </Typography>
+            {refreshButton}
+          </Box>
 
           {degraded && (
             <Alert severity="warning" role="alert">

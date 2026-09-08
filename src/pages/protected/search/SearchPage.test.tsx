@@ -31,7 +31,7 @@ const mockedClient = vi.mocked(vectrosApiClient);
 const GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['profiles:r'],
-  identity: { partnerUserId: 'usr_alice' },
+  identity: { userId: 'usr_alice' },
   can: () => true,
 };
 
@@ -62,7 +62,10 @@ function renderPage(client: unknown): void {
 
 /** One founded org, no memberships — the common single-org caller shape
  *  every non-multi-org test below assumes. */
-function singleFounderOrg(): { listEntities: ReturnType<typeof vi.fn>; lookupRecords: ReturnType<typeof vi.fn> } {
+function singleFounderOrg(): {
+  listEntities: ReturnType<typeof vi.fn>;
+  lookupRecords: ReturnType<typeof vi.fn>;
+} {
   return {
     listEntities: vi.fn().mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }])),
     lookupRecords: vi.fn().mockResolvedValue(pageOf([])), // org_membership discovery — none
@@ -87,11 +90,44 @@ describe('SearchPage', () => {
   it('shows the no-orgs empty state for a caller with no accessible org', async () => {
     const listEntities = vi.fn().mockResolvedValue(pageOf([]));
     const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
-    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content: vi.fn() } });
+    renderPage({
+      identity: { listEntities },
+      records: { lookupRecords },
+      search: { content: vi.fn() },
+    });
 
     expect(
-      await screen.findByText("You don't have an org to search in yet — ask an HR admin to invite you."),
+      await screen.findByText(
+        "You don't have an org to search in yet — ask an HR admin to invite you.",
+      ),
     ).toBeInTheDocument();
+  });
+
+  it('shows the no-orgs empty state (never runs org discovery or search) for a caller with no userId — scope gate degraded', async () => {
+    // useAccessibleOrgs computes its OWN isSuccess gated on hasUserId (not the
+    // underlying react-queries' native isPending, which would stay stuck true
+    // forever for a permanently-disabled query) — so this degrades the exact
+    // same way as "no accessible org", not a stuck spinner. Same behavior
+    // OrgsListPage's own no-userId branch relies on.
+    mockedUseScopeGate.mockReturnValue({ ...GATE, identity: {} });
+    const listEntities = vi.fn();
+    const lookupRecords = vi.fn();
+    const content = vi.fn();
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    expect(
+      await screen.findByText(
+        "You don't have an org to search in yet — ask an HR admin to invite you.",
+      ),
+    ).toBeInTheDocument();
+    expect(listEntities).not.toHaveBeenCalled();
+    expect(lookupRecords).not.toHaveBeenCalled();
+
+    // Submitting a query anyway must not run the search either — effectiveOrgId
+    // can never resolve without a userId to discover orgs against.
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search' }), 'anything');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(content).not.toHaveBeenCalled());
   });
 
   it('a single-org caller searches immediately, scoped to that org, via a disabled picker naming it', async () => {
@@ -127,10 +163,154 @@ describe('SearchPage', () => {
     );
   });
 
-  it('a multi-org caller sees an org picker and must choose before searching', async () => {
-    const listEntities = vi
+  it('re-submitting the SAME term runs the search again instead of serving the cached page', async () => {
+    // react-query keys the search on the submitted term, so re-submitting an unchanged term changes
+    // no key and issues no request. Indexing is asynchronous, so without an explicit refetch a search
+    // run seconds before an entry is indexed stays empty however many times it is re-run.
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const content = vi
       .fn()
-      .mockResolvedValue(pageOf([{ id: 'org_1', name: 'Acme Inc' }, { id: 'org_2', name: 'Beta LLC' }]));
+      .mockResolvedValueOnce({ results: [], totalResults: 0 })
+      .mockResolvedValue({
+        results: [
+          {
+            documentId: 'note_1',
+            metadata: { recordType: 'case_note' },
+            contextText: 'Now indexed.',
+          },
+        ],
+        totalResults: 1,
+      });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByText(/No results for/)).toBeInTheDocument();
+    expect(content).toHaveBeenCalledTimes(1);
+
+    // The SAME term again. Before the fix this issued no call at all and the empty state stood.
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Now indexed.')).toBeInTheDocument();
+  });
+
+  it('offers the refresh control on the ERROR state, and it re-runs the failed search', async () => {
+    // The third place the control lives, and the one a caller most wants after a transient 5xx:
+    // without it the only way to retry is to re-submit the form.
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const content = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('upstream exploded'))
+      .mockResolvedValue({
+        results: [
+          { documentId: 'n9', metadata: { recordType: 'case_note' }, contextText: 'Back up.' },
+        ],
+        totalResults: 1,
+      });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByText(/Couldn't run this search/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-run this search' }));
+    expect(await screen.findByText('Back up.')).toBeInTheDocument();
+  });
+
+  it('offers the refresh control alongside a NON-empty result set too, and it re-runs', async () => {
+    // Both other cells drive the EMPTY state, so neither would notice the control disappearing from
+    // the results header — the half of the behaviour a caller with results actually sees.
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const content = vi
+      .fn()
+      .mockResolvedValueOnce({
+        results: [
+          { documentId: 'n1', metadata: { recordType: 'case_note' }, contextText: 'First pass.' },
+        ],
+        totalResults: 1,
+      })
+      .mockResolvedValue({
+        results: [
+          { documentId: 'n2', metadata: { recordType: 'case_note' }, contextText: 'Second pass.' },
+        ],
+        totalResults: 1,
+      });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByText('First pass.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-run this search' }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Second pass.')).toBeInTheDocument();
+  });
+
+  it('treats a re-submit that only differs by surrounding whitespace as the same search, and re-runs it', async () => {
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const content = vi
+      .fn()
+      .mockResolvedValueOnce({ results: [], totalResults: 0 })
+      .mockResolvedValue({
+        results: [
+          {
+            documentId: 'n3',
+            metadata: { recordType: 'case_note' },
+            contextText: 'Trimmed match.',
+          },
+        ],
+        totalResults: 1,
+      });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    const box = await screen.findByRole('textbox', { name: 'Search' });
+    await userEvent.type(box, 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByText(/No results for/)).toBeInTheDocument();
+
+    // The trimmed value is unchanged, so this is the same search and must re-run rather than
+    // fall through to the key-change path.
+    await userEvent.type(box, '  ');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Trimmed match.')).toBeInTheDocument();
+  });
+
+  it('the refresh control re-runs the current search from the empty state', async () => {
+    // The empty state is where a refresh matters most, so the control has to be reachable THERE and
+    // not only alongside a result count the caller does not have yet.
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const content = vi
+      .fn()
+      .mockResolvedValueOnce({ results: [], totalResults: 0 })
+      .mockResolvedValue({
+        results: [
+          {
+            documentId: 'note_2',
+            metadata: { recordType: 'case_note' },
+            contextText: 'Arrived on the retry.',
+          },
+        ],
+        totalResults: 1,
+      });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByText(/No results for/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-run this search' }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Arrived on the retry.')).toBeInTheDocument();
+  });
+
+  it('a multi-org caller sees an org picker and must choose before searching', async () => {
+    const listEntities = vi.fn().mockResolvedValue(
+      pageOf([
+        { id: 'org_1', name: 'Acme Inc' },
+        { id: 'org_2', name: 'Beta LLC' },
+      ]),
+    );
     const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
     const content = vi.fn().mockResolvedValue({ results: [], totalResults: 0 });
     renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
@@ -171,7 +351,10 @@ describe('SearchPage', () => {
     await userEvent.type(screen.getByRole('textbox', { name: 'Search' }), 'intake');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(await screen.findByRole('link', { name: 'Case entry' })).toHaveAttribute('href', '/cases/case_1');
+    expect(await screen.findByRole('link', { name: 'Case entry' })).toHaveAttribute(
+      'href',
+      '/cases/case_1',
+    );
     expect(lookupRecordsByBody).toHaveBeenCalledWith({
       type: 'case',
       field: 'externalId',

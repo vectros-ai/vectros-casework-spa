@@ -296,6 +296,7 @@
   "search.empty": "No results for \"{query}\".",
   "search.resultCount": "{count, plural, one {# result} other {# results}}",
   "search.degraded": "Some results may be missing — this search ran in a degraded mode.",
+  "search.refresh": "Re-run this search",
   "search.loadMore": "Load more",
   "search.typeCase": "Case",
   "search.typeCaseEntry": "Case entry",

@@ -68,7 +68,7 @@ function distinctClientIdsForOrg(
 /**
  * `orgId` — which org's clients to discover (a client picker is always
  * scoped to one already-selected org, same as the existing quick-add flow).
- * `myUserId` — the caller's own `partnerUserId`. `enabled` — gate off a
+ * `myUserId` — the caller's own `userId`. `enabled` — gate off a
  * dialog's `open` state / the page's own readiness, same convention every
  * other on-demand query in this app uses.
  */

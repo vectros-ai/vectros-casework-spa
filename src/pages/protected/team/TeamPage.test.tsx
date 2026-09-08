@@ -34,7 +34,7 @@ const mockedClient = vi.mocked(vectrosApiClient);
 const HR_ADMIN_GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['profiles:c', 'profiles:r', 'profiles:d'],
-  identity: { partnerUserId: 'usr_admin' },
+  identity: { userId: 'usr_admin' },
   can: (a) => a === 'profiles:c' || a === 'profiles:r' || a === 'profiles:d',
 };
 
@@ -228,7 +228,7 @@ describe('TeamPage', () => {
     mockedUseScopeGate.mockReturnValue({
       loading: false,
       allowedActions: [],
-      identity: { partnerUserId: 'usr_handler' },
+      identity: { userId: 'usr_handler' },
       can: () => false,
     });
     const listAccessProfiles = vi.fn().mockResolvedValue(pageOf([]));
@@ -236,6 +236,34 @@ describe('TeamPage', () => {
 
     await screen.findByText('No one else has been invited yet.');
     expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+  });
+
+  it('shows the no-orgs warning inside the dialog (never queries orgs) for a caller with no userId — scope gate degraded', async () => {
+    // useAccessibleOrgs computes its OWN isSuccess gated on hasUserId (not the
+    // underlying react-queries' native isPending, which would stay stuck true
+    // forever for a permanently-disabled query) — so this degrades the exact
+    // same way as "no accessible org", not a stuck loading state.
+    const user = userEvent.setup();
+    mockedUseScopeGate.mockReturnValue({
+      loading: false,
+      allowedActions: ['profiles:c', 'profiles:r', 'profiles:d'],
+      identity: {},
+      can: () => true,
+    });
+    const listAccessProfiles = vi.fn().mockResolvedValue(pageOf([]));
+    const listEntities = vi.fn();
+    renderPage({ auth: { listAccessProfiles }, identity: { listEntities }, records: {} });
+
+    await screen.findByText('No one else has been invited yet.');
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
+
+    expect(
+      await screen.findByText("You don't have an org to invite someone into yet — found one first."),
+    ).toBeInTheDocument();
+    expect(listEntities).not.toHaveBeenCalled();
+    // The email/role/org fields never render without a resolvable org — nothing to submit.
+    expect(screen.queryByLabelText(/Email/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send invite' })).toBeDisabled();
   });
 
   it('single-org caller: org shown read-only (not an editable picker), invite sends the auto-selected org', async () => {

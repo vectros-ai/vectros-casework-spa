@@ -29,7 +29,7 @@ const mockedClient = vi.mocked(vectrosApiClient);
 const FULL_ACCESS_GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['entities:c:org', 'entities:u:org', 'entities:d:org'],
-  identity: { partnerUserId: 'usr_alice' },
+  identity: { userId: 'usr_alice' },
   can: (a) => ['entities:c:org', 'entities:u:org', 'entities:d:org'].includes(a),
 };
 
@@ -195,7 +195,7 @@ describe('OrgDetailPage', () => {
     mockedUseScopeGate.mockReturnValue({
       loading: false,
       allowedActions: [],
-      identity: { partnerUserId: 'usr_alice' },
+      identity: { userId: 'usr_alice' },
       can: () => false,
     });
     const getEntity = vi.fn().mockResolvedValue({ id: 'org_1', externalId: 'e', name: 'Acme Corp', payload: {} });

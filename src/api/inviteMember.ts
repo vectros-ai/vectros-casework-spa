@@ -3,12 +3,15 @@
 // sequence today: invite the person (grants them a ROLE — the actions they
 // may perform), then grant them org-level SCOPE (an org_membership row —
 // which org those actions reach) via a separate write. Deliberately kept
-// behind one function, same reasoning as createCase.ts: no composed-write
-// endpoint exists today, so the client drives the sequence, with no
-// rollback if the second call fails after the first succeeds. If it does,
-// the invite still exists (the person can still accept it) — only their
-// org-level access needs a retry, so the caller should treat that failure
-// as recoverable, not as "the whole invite failed."
+// behind one function, same reasoning as createCase.ts. The client drives
+// the sequence, with no rollback if the second call fails after the first
+// succeeds. If it does, the invite still exists (the person can still
+// accept it) — only their org-level access needs a retry, so the caller
+// should treat that failure as recoverable, not "the whole invite failed."
+//
+// The platform's composed-write path (a stored script committing as one
+// transaction) cannot make this pair atomic: it reaches records, documents
+// and folders, and an invitation is none of those.
 // ---------------------------------------------------------------------------
 
 import { CASEWORK_CONTEXT_ID, vectrosApiClient } from './vectrosApi';

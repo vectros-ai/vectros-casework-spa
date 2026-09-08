@@ -5,12 +5,23 @@
 // **Archive, not delete — deliberately, not a scope cut.** There is no
 // `entities:d:client` grant anywhere in this blueprint: deleting a client
 // while cases/notes/documents still reference it via `scope:client:<id>`
-// would orphan them, and there's no composed/transactional endpoint to
-// cascade the delete safely (`createCase.ts`'s own header comment documents
-// the same platform gap for the create path). Archiving uses the entity's
-// own platform-native `status` field (`ACTIVE`/`SUSPENDED` — see
+// would orphan them, and no single call can cascade the delete safely: the
+// platform's composed-write path (a stored script committing as one
+// transaction) reaches records, documents and folders, but not identity
+// entities, so the client entity itself would still be a separate,
+// un-rolled-back delete (`createCase.ts`'s header comment describes the same
+// boundary on the create path). Archiving uses the entity's own
+// platform-native `status` field (`ACTIVE`/`SUSPENDED` — see
 // `client_profile`'s schema comment) instead — an ordinary `entities:u:client`
 // update, no new grant, no cascade.
+//
+// ⚠️ Nothing enforces `status` — not the platform, and not this page. A
+// `SUSPENDED` entity stays readable and updatable server-side, and the only
+// thing this page does with the value is render an "Archived" chip and flip
+// the archive/reactivate button. The name/payload form stays editable (it
+// gates on `entities:u:client`, not on status), and a suspended client is
+// still offered when creating a case. A fork that needs deactivation to have
+// teeth must add those checks itself.
 //
 // **Members section — `hr-admin`-only, gated on `records:c:client_membership`
 // (the only role holding write on that schema at all).** This is what makes
@@ -386,7 +397,7 @@ export function ClientDetailPage(): React.JSX.Element {
   const queryClient = useQueryClient();
   const { id = '' } = useParams();
   const { identity, can: canPerformAction } = useScopeGate();
-  const myUserId = identity.partnerUserId;
+  const myUserId = identity.userId;
   const canEdit = canPerformAction('entities:u:client');
   const canManageMembers = canPerformAction('records:c:client_membership');
 

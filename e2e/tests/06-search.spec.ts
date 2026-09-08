@@ -63,39 +63,44 @@ test.use({ storageState: perFileAuth(test) });
 /** Submits `query` and waits for it to surface as a real result, retrying the search itself
  *  while indexing catches up (see file header) -- returns `true` once a `<p>` containing the
  *  exact `query` text renders (the result card's snippet -- see the caller's own comment on why
- *  this must be the exact-marker locator, not a generic "a result exists" check), `false` if the
- *  budget (up to ~10 attempts, generous per-attempt waits -- live-caught running this spec: the
- *  search-engine write can take meaningfully longer to land than the DDB version bump
- *  `04-cases.spec.ts`'s own race accounts for) is exhausted first.
+ *  this must be the exact-marker locator, not a generic "a result exists" check), `false` once the
+ *  budget of 8 attempts is exhausted.
  *
- *  Waits for an actual TERMINAL state each attempt (the "No results" alert, or the exact-marker
- *  result), never just `networkidle` -- live-caught: `networkidle` can resolve before this app's
- *  own TanStack Query fetch has finished rendering (still showing the "Searching…" spinner),
- *  which made an earlier version of this helper wrongly read a still-loading page as "results
- *  already found" and return before anything had actually settled. */
+ *  Each attempt waits on the SEARCH RESPONSE and then reads the DOM. It never waits on
+ *  `networkidle`, which can resolve while this app's own TanStack Query fetch is still rendering,
+ *  and it never races the marker against the "No results" alert -- that alert is already on screen
+ *  from the previous attempt, so a race settles on it instantly and the poll never observes the
+ *  result it is waiting for. */
 async function searchUntilIndexed(
   page: import('@playwright/test').Page,
   query: string,
-  attempts = 10,
+  attempts = 8,
 ): Promise<boolean> {
   const searchBox = page.getByRole('textbox', { name: 'Search' });
-  const noResults = page.getByText(`No results for "${query}".`);
   // Scoped to a `<p>` (the result card's snippet, `Typography variant="body2"`) rather than a
   // bare page-wide getByText -- the latter also matches the search TEXTBOX's own typed-in value
   // (which literally contains `query` too), a false positive that would pass even on zero real
   // results. Live-caught: this is exactly what happened before this scoping was added.
   const found = page.locator('p', { hasText: query }).first();
+  const searchButton = page.getByRole('button', { name: 'Search', exact: true });
+
   for (let attempt = 0; attempt < attempts; attempt++) {
     await searchBox.fill(query);
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
-    const settled = await Promise.race([
-      found.waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'found' as const).catch(() => null),
-      noResults.waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'empty' as const).catch(() => null),
-    ]);
-    if (settled === 'found') return true;
-    if (settled === 'empty') await page.waitForTimeout(6_000);
-    // `settled === null` (neither state showed up in time) -- retry too, no extra wait needed,
-    // the two 15s `waitFor` calls already spent real time.
+    // Wait on the SEARCH RESPONSE, then read the DOM. Racing the marker locator against the
+    // "No results" alert cannot work: that alert is already on screen when this attempt clicks, so
+    // it settles the race instantly and the poll never looks at the result it is waiting for.
+    // Worst case per attempt is 10s + 5s + 6s, kept inside this spec's own 240s budget.
+    const settled = page
+      .waitForResponse((r) => /\/v1\/search/.test(r.url()), { timeout: 10_000 })
+      .catch(() => null);
+    await searchButton.click();
+    await settled;
+    const appeared = await found
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (appeared) return true;
+    await page.waitForTimeout(6_000);
   }
   return false;
 }
@@ -119,7 +124,12 @@ test.describe('search', () => {
     await page.getByRole('option', { name: 'intake', exact: true }).click();
     await page.getByLabel('body').fill(`Smoke-suite search regression entry ${marker}.`);
     await page.getByRole('button', { name: 'Add entry', exact: true }).click();
-    await expect(page.getByText(marker)).toBeVisible({ timeout: 10_000 });
+    // Scoped to the rendered entry's own `<p>` (`Typography variant="body2"`), NOT a page-wide
+    // getByText -- that also matches the `body` TEXTAREA this test just typed the marker into, so it
+    // passes whether or not the entry was ever created, and the run then fails much later at the
+    // search step pointing at the wrong subsystem. Same false positive this file's header already
+    // documents for the search box, one field over.
+    await expect(page.locator('p', { hasText: marker }).first()).toBeVisible({ timeout: 10_000 });
 
     await page.goto('/search', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { level: 1, name: 'Search' })).toBeVisible();

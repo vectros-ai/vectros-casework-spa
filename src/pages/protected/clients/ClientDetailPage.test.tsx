@@ -31,7 +31,7 @@ const mockedClient = vi.mocked(vectrosApiClient);
 const FULL_ACCESS_GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['entities:u:client', 'records:c:client_membership'],
-  identity: { partnerUserId: 'usr_admin' },
+  identity: { userId: 'usr_admin' },
   can: (a) => ['entities:u:client', 'records:c:client_membership'].includes(a),
 };
 
@@ -41,7 +41,7 @@ const FULL_ACCESS_GATE: ScopeGateValue = {
 const MEMBER_ONLY_GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['entities:u:client'],
-  identity: { partnerUserId: 'usr_handler' },
+  identity: { userId: 'usr_handler' },
   can: (a) => a === 'entities:u:client',
 };
 
@@ -395,11 +395,56 @@ describe('ClientDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Archive client' })).not.toBeInTheDocument();
   });
 
+  it('reactivates a suspended client by sending the canonical upper-case ACTIVE, with no confirm step', async () => {
+    // Regression guard for the write CONTRACT, not the rendering. The archive direction is
+    // pinned above; this pins the other one. What it actually guards is that reactivate sends
+    // `status: 'ACTIVE'` and nothing else -- so a change to echoing the whole client back (which
+    // would resend a STALE status, and on a suspended client would silently un-reactivate it)
+    // fails here rather than in staging. Reactivate also deliberately has NO confirm dialog,
+    // unlike archive, so this asserts the single click is the whole interaction.
+    //
+    // NB: a lower-case `'active'` would NOT fail against the API -- the 0.43.0 update path
+    // upper-cases before validating, so it normalises to ACTIVE and returns 200. Only a value
+    // outside ACTIVE/SUSPENDED is a 400. The canonical spelling is pinned here because it is what
+    // this app sends and what the CHANGELOG claims, not because the wire would reject the other.
+    const user = userEvent.setup();
+    mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
+    const getEntity = vi
+      .fn()
+      .mockResolvedValueOnce({ ...CLIENT, status: 'SUSPENDED' })
+      .mockResolvedValue(CLIENT);
+    const listSchemas = vi.fn().mockResolvedValue(pageOf([SCHEMA]));
+    const updateEntity = vi.fn().mockResolvedValue(CLIENT);
+    const listRecords = vi.fn().mockResolvedValue(pageOf([]));
+    const listAccessProfiles = vi.fn().mockResolvedValue(pageOf([]));
+    const deleteEntity = vi.fn();
+    renderPage({
+      identity: { getEntity, updateEntity, deleteEntity },
+      schemas: { listSchemas },
+      records: { listRecords },
+      auth: { listAccessProfiles },
+    });
+
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+    await user.click(screen.getByRole('button', { name: 'Reactivate client' }));
+
+    await waitFor(() =>
+      expect(updateEntity).toHaveBeenCalledWith({
+        namespace: 'client',
+        id: 'client_1',
+        contextId: 'casework',
+        body: { externalId: 'client_ext_1', status: 'ACTIVE' },
+      }),
+    );
+    expect(deleteEntity).not.toHaveBeenCalled();
+    expect(await screen.findByText('Reactivated.')).toBeInTheDocument();
+  });
+
   it('hides edit AND the Members section for a caller without entities:u:client / records:c:client_membership', async () => {
     mockedUseScopeGate.mockReturnValue({
       loading: false,
       allowedActions: [],
-      identity: { partnerUserId: 'usr_x' },
+      identity: { userId: 'usr_x' },
       can: () => false,
     });
     const getEntity = vi.fn().mockResolvedValue(CLIENT);

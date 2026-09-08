@@ -100,7 +100,7 @@ function InviteDialog({ open, onClose, onInvited }: InviteDialogProps): React.JS
   const intl = useIntl();
   const queryClient = useQueryClient();
   const { identity } = useScopeGate();
-  const myUserId = identity.partnerUserId;
+  const myUserId = identity.userId;
   const hasUserId = typeof myUserId === 'string' && myUserId !== '';
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');

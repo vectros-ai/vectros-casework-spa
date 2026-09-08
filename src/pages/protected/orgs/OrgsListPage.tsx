@@ -224,10 +224,10 @@ export function OrgsListPage(): React.JSX.Element {
 
   // The founder-enumeration call (`GET /v1/entities/org?userId=`) needs the
   // caller's OWN Vectros user id — the platform's `${{ self.userId }}` —
-  // which is NOT the Auth0 `sub` useAuth() exposes. It's the `partnerUserId`
-  // the exchanged token's own `scope.identity` claim carries (see
-  // useScopeGate's doc). Absent only while the gate is still loading.
-  const myUserId = identity.partnerUserId;
+  // which is NOT the Auth0 `sub` useAuth() exposes. It's the `userId` the
+  // mint response's own resolved `identity` carries (see useScopeGate's
+  // doc). Absent only while the gate is still loading.
+  const myUserId = identity.userId;
 
   const hasUserId = typeof myUserId === 'string' && myUserId !== '';
   const orgsQuery = useQuery({

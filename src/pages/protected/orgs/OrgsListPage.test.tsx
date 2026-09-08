@@ -34,7 +34,7 @@ const mockedClient = vi.mocked(vectrosApiClient);
 const FOUNDER_GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['entities:c:org'],
-  identity: { partnerUserId: 'usr_alice' },
+  identity: { userId: 'usr_alice' },
   can: (a) => a === 'entities:c:org',
 };
 
@@ -124,7 +124,7 @@ describe('OrgsListPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load your orgs");
   });
 
-  it('warns instead of querying when the scope gate resolves with no partnerUserId', async () => {
+  it('warns instead of querying when the scope gate resolves with no userId', async () => {
     mockedUseScopeGate.mockReturnValue({
       loading: false,
       allowedActions: ['entities:c:org'],
@@ -142,7 +142,7 @@ describe('OrgsListPage', () => {
     mockedUseScopeGate.mockReturnValue({
       loading: false,
       allowedActions: [],
-      identity: { partnerUserId: 'usr_alice' },
+      identity: { userId: 'usr_alice' },
       can: () => false,
     });
     const listEntities = vi.fn().mockResolvedValue(pageOf([]));

@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   setPartnerApiTokenMinter,
@@ -17,6 +17,17 @@ import {
 
 import { HomePage } from './HomePage';
 import { TestProviders } from '../../test/TestProviders';
+import { pageOf } from '../../test/pageOf';
+import { CASES_ACTION, ORGS_ACTION } from '../../lib/scopeActions';
+
+vi.mock('../../api/vectrosApi', async (importOriginal) => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vitest's importOriginal idiom
+  const actual = await importOriginal<typeof import('../../api/vectrosApi')>();
+  return { ...actual, vectrosApiClient: vi.fn() };
+});
+import { vectrosApiClient } from '../../api/vectrosApi';
+
+const mockedClient = vi.mocked(vectrosApiClient);
 
 afterEach(() => {
   __resetVectrosApiTokenCacheForTest();
@@ -32,6 +43,42 @@ describe('HomePage', () => {
     );
 
     expect(await screen.findByText(/alice@example.com/)).toBeInTheDocument();
+  });
+
+  it("reads the mint response's resolved identity.userId to gate the open-cases + accessible-orgs queries", async () => {
+    // Line-level coverage for `identity.userId` (HomePage's own read) — mirrors the fix applied
+    // across the other seven pages that read this same field, previously the untranslated internal
+    // `partnerUserId` key. A caller with CASES_ACTION/ORGS_ACTION but no resolvable userId would
+    // never fire either query below (`enabled: hasUserId && ...`) — this pins that the real userId
+    // value flows all the way through to both calls, not just that the field exists on `identity`.
+    const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
+    const listEntities = vi.fn().mockResolvedValue(pageOf([]));
+    mockedClient.mockReturnValue({
+      records: { lookupRecords },
+      identity: { listEntities },
+    } as never);
+    setPartnerApiTokenMinter(async () => ({
+      token: 'st_test',
+      expiresAtMs: Date.now() + 900_000,
+      resolvedScope: {
+        allowedActions: [CASES_ACTION, ORGS_ACTION],
+        identity: { userId: 'usr_1' },
+      },
+    }));
+
+    render(
+      <TestProviders
+        authOverrides={{ getCurrentUser: vi.fn().mockResolvedValue({ sub: 's1', email: 'alice@example.com' }) }}
+      >
+        <HomePage />
+      </TestProviders>,
+    );
+
+    await screen.findByText(/alice@example.com/);
+    await waitFor(() =>
+      expect(lookupRecords).toHaveBeenCalledWith(expect.objectContaining({ type: 'case' })),
+    );
+    expect(listEntities).toHaveBeenCalledWith(expect.objectContaining({ userId: 'usr_1' }));
   });
 
   it('shows a success message when the token mint succeeds', async () => {

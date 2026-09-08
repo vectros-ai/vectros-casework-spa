@@ -234,7 +234,7 @@ export function ClientsListPage(): React.JSX.Element {
   const intl = useIntl();
   const navigate = useNavigate();
   const { identity, can: canPerformAction, loading: scopeLoading } = useScopeGate();
-  const myUserId = identity.partnerUserId;
+  const myUserId = identity.userId;
   const hasUserId = typeof myUserId === 'string' && myUserId !== '';
   const [selectedOrgId, setSelectedOrgId] = useState('');
   const [createOpen, setCreateOpen] = useState(false);

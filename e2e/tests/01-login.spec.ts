@@ -20,7 +20,11 @@ test.describe('sign-in', () => {
     await expect(page.getByText(env.email)).toBeVisible();
 
     await page.getByRole('button', { name: 'Test API connection' }).click();
-    await expect(page.getByText(/partner-API token was minted successfully/)).toBeVisible({
+    // Match the app's real copy (home.tokenCheckOk in messages.en.json) — this
+    // regex had drifted from it (asserted "partner-API", the app says "Vectros
+    // API"), so this spec was failing regardless of whether the mint itself
+    // actually succeeded.
+    await expect(page.getByText(/a Vectros API token was minted successfully/)).toBeVisible({
       timeout: 15_000,
     });
   });

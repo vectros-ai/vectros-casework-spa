@@ -34,6 +34,54 @@ test.describe('cases', () => {
     await expect(page.getByText('Unassigned')).toBeVisible();
   });
 
+  test('case creation goes through ONE composed script execution the deployed API accepts', async ({ page }) => {
+    // The cell a mocked-client unit test cannot stand in for. Unit tests prove the
+    // app SENDS one execute call; only this proves the deployed API accepts it --
+    // that `create-case` is provisioned in this context, that the caller's role
+    // actually carries `scripts:x:create-case`, and that the script's own writes
+    // pass the caller's data scopes. Any of those missing is a 403 or a 404 here
+    // and a green suite everywhere else.
+    // METHOD matters, and leaving it out is why the first version of this cell
+    // failed: `/v1/records` is also the case LIST read, so an unfiltered capture
+    // saw fifteen 200s and reported them as writes. Only POSTs are writes.
+    const calls: { method: string; url: string; status: number }[] = [];
+    page.on('response', (r) => {
+      const req = r.request();
+      if (req.method() !== 'POST') return;
+      const u = new URL(r.url()).pathname;
+      if (u.endsWith('/v1/scripts/execute') || u.endsWith('/v1/folders') || u.endsWith('/v1/records')) {
+        calls.push({ method: req.method(), url: u, status: r.status() });
+      }
+    });
+
+    const url = await createCaseForExistingClient(page, SMOKE_ORG_A, SMOKE_CLIENT_A);
+    expect(url).toMatch(/\/cases\//);
+
+    // Enumerated, not counted: the observed calls ride the assertion messages, so a
+    // failure names what was actually seen rather than only how many.
+    const seen = JSON.stringify(calls);
+    const executes = calls.filter((c) => c.url.endsWith('/v1/scripts/execute'));
+    expect(executes, `expected one composed execute; saw ${seen}`).toHaveLength(1);
+    expect(executes[0]?.status, `the deployed API accepted the composed call; saw ${seen}`).toBe(200);
+
+    // And the two writes it replaced are genuinely gone from this flow -- a POST
+    // to either would mean the app fell back to the un-rolled-back sequence.
+    const folderPosts = calls.filter((c) => c.url.endsWith('/v1/folders'));
+    const recordPosts = calls.filter((c) => c.url.endsWith('/v1/records'));
+    expect(folderPosts, `no separate folder write; saw ${seen}`).toHaveLength(0);
+    expect(recordPosts, `no separate record write; saw ${seen}`).toHaveLength(0);
+
+    // The case really exists and carries its folder -- the transaction committed
+    // both halves, not just the one the URL proves.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('grievance');
+    // The FOLDER half of the transaction, and the only thing on this page that
+    // observes it. The Documents heading renders unconditionally, so asserting it
+    // says nothing the heading above has not already said; the upload control is
+    // what is gated on the case's folderId — rendered but DISABLED when the case
+    // carries none. So `toBeEnabled`, not `toBeVisible`.
+    await expect(page.getByRole('button', { name: 'Upload document' })).toBeEnabled();
+  });
+
   test('status filter: All shows it, a non-matching status filters it out', async ({ page }) => {
     await createCaseForExistingClient(page, SMOKE_ORG_A, SMOKE_CLIENT_A);
 
@@ -130,7 +178,11 @@ test.describe('cases', () => {
     await page.getByLabel('body').fill('Smoke-suite regression entry.');
     await page.getByRole('button', { name: 'Add entry', exact: true }).click();
 
-    await expect(page.getByText('Smoke-suite regression entry.')).toBeVisible({ timeout: 10_000 });
+    // Scoped to the rendered entry's own `<p>`, not page-wide: a bare getByText also matches the
+    // `body` textarea just filled above, so it would pass on an entry that was never created.
+    await expect(
+      page.locator('p', { hasText: 'Smoke-suite regression entry.' }).first(),
+    ).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('No entries yet.')).toHaveCount(0);
   });
 

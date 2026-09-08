@@ -4,6 +4,115 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-09-07
+
+### Changed
+
+- **Now built and tested against `@vectros-ai/sdk` `^0.43.0`** (was `^0.42.0`). No application code
+  needed to change: nothing this app calls was removed, renamed or re-typed across the release, and
+  the type-check is clean against the new client.
+
+  Three **server-side** behaviour changes in the same release reach this app once that API is
+  deployed. They arrive with the API, not with this dependency bump, and none of them needed a code
+  change here:
+
+  - A browser request to an **unmatched route**, or one blocked before it reaches a handler, now
+    comes back as the status it was shaped to be instead of an opaque CORS failure with no status.
+  - The entity update path now rejects a `status` outside `ACTIVE`/`SUSPENDED` rather than storing
+    it. This app only ever sends those two, in canonical upper case.
+  - `POST /v1/auth/token/exchange` now re-reads the access profile's status on every request instead
+    of trusting a memoized scope, so a suspended profile is refused immediately rather than
+    continuing to mint tokens for up to five minutes. Sign-in for a just-suspended profile therefore
+    fails sooner than it used to.
+
+- **`blueprint/casework.blueprint.yaml`: corrected two comments that described platform behaviour
+  inaccurately.** Comments only — the blueprint's parsed content is byte-for-byte unchanged, so no
+  re-apply and no blueprint version bump is needed.
+  - The client-deactivation note claimed `SUSPENDED` entities are "blocked from new operations" by
+    the platform, citing the SDK's `EntityRequest.status` documentation as its authority. That was
+    never true and the SDK documentation no longer says it: the platform stores `status` and hands
+    it back unchanged, and a `SUSPENDED` entity stays readable, updatable and referenceable.
+    **No behaviour changed, and the corrected note is blunter than the old one:** nothing enforces
+    the status — not the platform, and not this app either. Deactivating a client renders an
+    "Archived" chip and flips the archive/reactivate button, and that is all. A suspended client is
+    still editable, still listed, and still selectable when creating a case. A fork that needs
+    deactivation to have teeth has to add those checks itself.
+  - The `case.caseType` note explained that `status` was left non-filterable to avoid overwriting a
+    lifecycle `status` key the platform writes into every record's search metadata. The platform no
+    longer writes that key, and `status` is not a reserved filterable field id on either the record
+    or the document surface, so there is no collision to avoid. `status` stays non-filterable for
+    the ordinary product reason (search results here only read `caseType`), and the note now lists
+    the field ids that genuinely are reserved. **The 1.1.0 entry below repeats the same withdrawn
+    claim and points at that comment for a "full trace"** — it is left as published, but treat it as
+    retracted by this entry.
+
+- **`createCase`, `inviteMember` and `ClientDetailPage` no longer claim the platform has no
+  composed-write endpoint.** It has one: a stored script executed synchronously, whose writes all
+  commit as a single transaction. It does not close these particular sequences, because a script
+  reaches records, documents and folders but not identity entities or invitations — and each of
+  these sequences has a leg of exactly that kind. The comments now describe that boundary instead
+  of a gap that no longer exists. No behaviour change; these remain client-driven sequences.
+
+- **Reads of the caller's own user id follow `@vectros-ai/react` 0.12.0's public `userId` identity
+  key.** `useScopeGate` now resolves `identity` from the mint response's server-resolved
+  `resolvedScope` field, which uses the public spelling `userId` rather than the untranslated
+  internal JWT key. A fork carrying its own reads of `identity.partnerUserId` must make the same
+  change when it bumps. Left unchanged they do not crash — they degrade silently onto the existing
+  "no `userId`" warn-and-don't-query path, so own-case counts, org/client founder checks and
+  self-authored rows quietly stop resolving.
+
+### Fixed
+
+- **A search can now be re-run.** Searching again for a term already on screen returned the same
+  results without re-querying, so an entry added moments earlier could stay invisible until the page
+  was reloaded. Indexing is asynchronous and takes a few seconds, which made this easiest to hit
+  right after adding a case entry. Submitting the same term now runs the search again, and a refresh
+  control sits beside the result count, on the "no results" state and on the error state.
+
+- **Creating a case is now one transaction: either the case and its folder both exist, or neither
+  does — and re-submitting one never creates a second.** Creating a case makes two writes -- the
+  case's folder, then the case record carrying that folder's id. Driven from the browser those could
+  fail independently, and a failure between them left a folder with no case attached to it and no
+  way to clean it up. They now run as a single stored operation on the server, which commits both or
+  neither.
+
+  The identifiers a submission uses are derived from the values it sends, so submitting the same
+  case again reuses them rather than minting new ones: the client, the case and the folder each
+  resolve to the row the first attempt created instead of a second one. That holds whether the first
+  attempt succeeded, failed, or never reported back, and it survives closing the dialog and
+  reopening it. Changing the form makes it a different submission, as intended, and creating the
+  case successfully ends it — an identical case raised later is a new one.
+
+  A request that has already succeeded is additionally short-circuited: repeating it returns the
+  original response without running anything. That applies to a successful response and to one
+  reporting an unknown outcome; any other failure is retried for real, which is why the derived
+  identifiers above are what actually prevents the duplicate.
+
+  One situation still needs a human: if the operation runs out of time while its writes may already
+  have committed, the API reports the outcome as unknown and repeating the request returns that same
+  answer. Check whether the case exists before creating it again.
+
+  ⚠️ **Re-apply this blueprint** (this app's own Quickstart step 3) before deploying this version,
+  and deploy against an API of **0.43.0 or later**. The blueprint adds the stored operation and the
+  permission to run it; the API version matters because case creation now sends an
+  `Idempotency-Key` header, which earlier deployments do not allow through their cross-origin
+  preflight. Against either an un-applied blueprint or an older API, **case creation fails
+  outright** — on the primary path, not only on a retry.
+
+  The client record is still created first and separately, so a failure after that point can still
+  leave a client with no case. That is a smaller gap than the one this closes, and closing it needs
+  a platform capability that does not exist yet.
+
+- **A failed document upload no longer leaves a document behind with no file in it.** Attaching a
+  document to a case is two steps: the document is created, then the bytes are sent. A rejected
+  upload was already cleaned up; an upload that came back without a destination to send the bytes to
+  was not, and left a document on the case that could not be opened or downloaded. Both failures are
+  now cleaned up, and the upload error is what gets reported rather than a cleanup error. A document
+  the upload did not itself create is never removed this way.
+
+  This needs the blueprint re-applied too: case handlers and HR admins can now delete a document
+  they own, which is what the cleanup uses. It does not let either role delete anyone else's.
+
 ## [1.1.0] - 2026-09-01
 
 ### Added

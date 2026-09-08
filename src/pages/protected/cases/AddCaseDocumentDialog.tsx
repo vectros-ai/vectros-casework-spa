@@ -30,6 +30,8 @@ import {
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { ApiErrorAlert, SubmitButton } from '@vectros-ai/react';
+
+import { putBytesOrCompensate } from '../../../api/putBytesOrCompensate';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -100,31 +102,13 @@ export function AddCaseDocumentDialog({
         scopes: [orgScope, clientScope],
         payload: { caseId },
       });
-      if (!created.uploadUrl) throw new Error('upload did not return a presigned URL');
-      // PUT the raw bytes straight to S3 — the presigned URL is self-
-      // authenticating, so NO Authorization header (one would break the
-      // signature). Content-Type must match the fileType we declared.
-      try {
-        const put = await fetch(created.uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': fileType },
-          body: file,
-        });
-        if (!put.ok) throw new Error(`file upload failed: ${put.status}`);
-      } catch (putError) {
-        // uploadDocument() above already created the document record before
-        // this PUT ran — a failed PUT would otherwise leave a phantom,
-        // byte-less document behind with no in-app way to remove it. Best
-        // effort only: if the id is missing or the delete itself fails, the
-        // ORIGINAL putError is what the user needs to see, not a cleanup
-        // failure masking it.
-        if (created.id) {
-          await vectrosApiClient()
-            .documents.deleteDocument({ id: created.id })
-            .catch(() => undefined);
-        }
-        throw putError;
-      }
+      // A document row EXISTS from here on, so every failure below has to undo
+      // it. Both branches count: a missing presigned URL strands the document
+      // just as surely as a rejected PUT, which is why the check sits INSIDE
+      // the boundary rather than in front of it.
+      await putBytesOrCompensate(created, file, fileType, (args) =>
+        vectrosApiClient().documents.deleteDocument(args),
+      );
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: dataQueryKeys.caseDocuments(caseId) });
@@ -134,7 +118,11 @@ export function AddCaseDocumentDialog({
   });
 
   const fileTooLarge = file !== null && file.size > MAX_UPLOAD_BYTES;
-  const canSubmit = !mutation.isPending && file !== null && !fileTooLarge && typeof schemaQuery.data?.id === 'string';
+  const canSubmit =
+    !mutation.isPending &&
+    file !== null &&
+    !fileTooLarge &&
+    typeof schemaQuery.data?.id === 'string';
 
   return (
     <Dialog open={open} onClose={() => !mutation.isPending && onClose()} fullWidth maxWidth="sm">
@@ -162,7 +150,9 @@ export function AddCaseDocumentDialog({
               startIcon={<UploadFileIcon />}
               onClick={() => fileInputRef.current?.click()}
             >
-              <FormattedMessage id={file ? 'addCaseDocument.changeFile' : 'addCaseDocument.chooseFile'} />
+              <FormattedMessage
+                id={file ? 'addCaseDocument.changeFile' : 'addCaseDocument.chooseFile'}
+              />
             </Button>
             {file ? (
               <Chip
@@ -190,7 +180,9 @@ export function AddCaseDocumentDialog({
             )}
             <FormControlLabel
               sx={{ mt: 1.5, display: 'block' }}
-              control={<Switch checked={storeText} onChange={(e) => setStoreText(e.target.checked)} />}
+              control={
+                <Switch checked={storeText} onChange={(e) => setStoreText(e.target.checked)} />
+              }
               label={intl.formatMessage({ id: 'addCaseDocument.storeText' })}
             />
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>

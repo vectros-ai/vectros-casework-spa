@@ -32,7 +32,7 @@ const mockedClient = vi.mocked(vectrosApiClient);
 const CREATE_GATE: ScopeGateValue = {
   loading: false,
   allowedActions: ['entities:c:client'],
-  identity: { partnerUserId: 'usr_alice' },
+  identity: { userId: 'usr_alice' },
   can: (a) => a === 'entities:c:client',
 };
 
@@ -143,7 +143,7 @@ describe('ClientsListPage', () => {
     mockedUseScopeGate.mockReturnValue({
       loading: false,
       allowedActions: [],
-      identity: { partnerUserId: 'usr_alice' },
+      identity: { userId: 'usr_alice' },
       can: () => false,
     });
     renderPage(singleOrgClient());

@@ -37,23 +37,23 @@ const ALICE: AuthUser = {
   lastName: 'Example',
 };
 
-/** base64url-encode (no padding) — mirrors how a JWT segment is encoded. */
-function b64url(s: string): string {
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/** Build an `st_test_*`-shaped token carrying the given allowed_actions +
- *  identity, matching the real exchange-minted token's `scope` claim shape
- *  (see useScopeGate's own decode). */
-function makeScopedToken(
+/**
+ * Build a mint response carrying the given allowed actions + identity as the
+ * server-resolved `resolvedScope` field — the shape `useScopeGate`
+ * reads directly now, replacing the old client-decoded compressed-`scope`-
+ * claim token this fixture used to build. The token string itself is opaque
+ * to the frontend (nothing decodes it anymore), so a fixed placeholder is
+ * fine.
+ */
+function mintResult(
   allowedActions: ReadonlyArray<string>,
   identity: Readonly<Record<string, string>> = {},
-): string {
-  const header = b64url(JSON.stringify({ alg: 'none', typ: 'JWT' }));
-  const payload = b64url(
-    JSON.stringify({ scope: { scopes: [{ allowed_actions: allowedActions }], identity } }),
-  );
-  return `st_test_${header}.${payload}.sig`;
+): { token: string; expiresAtMs: number; resolvedScope: { allowedActions: ReadonlyArray<string>; identity: Readonly<Record<string, string>> } } {
+  return {
+    token: 'st_test_opaque',
+    expiresAtMs: Date.now() + 60_000,
+    resolvedScope: { allowedActions, identity },
+  };
 }
 
 describe('App routing', () => {
@@ -105,10 +105,7 @@ describe('App routing', () => {
 
     it('shows the Orgs nav item and lets a caller with entities:c:org reach /orgs', async () => {
       const user = userEvent.setup();
-      setPartnerApiTokenMinter(async () => ({
-        token: makeScopedToken(['entities:c:org'], { partnerUserId: 'usr_alice' }),
-        expiresAtMs: Date.now() + 60_000,
-      }));
+      setPartnerApiTokenMinter(async () => mintResult(['entities:c:org'], { userId: 'usr_alice' }));
 
       render(
         <TestProviders
@@ -127,10 +124,7 @@ describe('App routing', () => {
     });
 
     it('hides the Orgs nav item and redirects a caller without entities:c:org away from /orgs', async () => {
-      setPartnerApiTokenMinter(async () => ({
-        token: makeScopedToken([], {}),
-        expiresAtMs: Date.now() + 60_000,
-      }));
+      setPartnerApiTokenMinter(async () => mintResult([], {}));
 
       render(
         <TestProviders
@@ -162,10 +156,7 @@ describe('App routing', () => {
 
     it('shows the Search nav item and lets an hr-admin-shaped caller (profiles:r) reach /search', async () => {
       const user = userEvent.setup();
-      setPartnerApiTokenMinter(async () => ({
-        token: makeScopedToken(['profiles:r'], { partnerUserId: 'usr_alice' }),
-        expiresAtMs: Date.now() + 60_000,
-      }));
+      setPartnerApiTokenMinter(async () => mintResult(['profiles:r'], { userId: 'usr_alice' }));
 
       render(
         <TestProviders
@@ -188,10 +179,7 @@ describe('App routing', () => {
       // deliberately `profiles:r`, not `search:r`, because both hr-admin and case-handler hold
       // `search:r` in the blueprint (see scopeActions.ts's own comment on why a scope-action check
       // alone can't distinguish the two roles here).
-      setPartnerApiTokenMinter(async () => ({
-        token: makeScopedToken(['search:r'], { partnerUserId: 'usr_bob' }),
-        expiresAtMs: Date.now() + 60_000,
-      }));
+      setPartnerApiTokenMinter(async () => mintResult(['search:r'], { userId: 'usr_bob' }));
 
       render(
         <TestProviders
@@ -220,10 +208,7 @@ describe('App routing', () => {
 
     it('shows the Cases nav item and lets a caller with records:r:case reach /cases', async () => {
       const user = userEvent.setup();
-      setPartnerApiTokenMinter(async () => ({
-        token: makeScopedToken(['records:r:case']),
-        expiresAtMs: Date.now() + 60_000,
-      }));
+      setPartnerApiTokenMinter(async () => mintResult(['records:r:case']));
 
       render(
         <TestProviders
@@ -242,10 +227,7 @@ describe('App routing', () => {
     });
 
     it('hides the Cases nav item and redirects a caller without records:r:case away from /cases', async () => {
-      setPartnerApiTokenMinter(async () => ({
-        token: makeScopedToken([]),
-        expiresAtMs: Date.now() + 60_000,
-      }));
+      setPartnerApiTokenMinter(async () => mintResult([]));
 
       render(
         <TestProviders

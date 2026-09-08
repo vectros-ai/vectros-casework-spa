@@ -7,7 +7,7 @@ template for testing your own customizations.
 
 ## What it covers
 
-Six spec files, run in numeric order (`fullyParallel: false`, `workers: 1`):
+Seven spec files, run in numeric order (`fullyParallel: false`, `workers: 1`):
 
 - **`01-login-failure.spec.ts`** — a bad/forged authorization code at `/callback` shows the app's
   own "Sign-in failed" error screen, not a blank page. No real Auth0 login involved — deliberately
@@ -22,6 +22,8 @@ Six spec files, run in numeric order (`fullyParallel: false`, `workers: 1`):
   appears once a caller's cases span more than one org.
 - **`05-team.spec.ts`** — the roster lists the signed-in caller correctly, and a live invite
   exercises the invite flow end to end.
+- **`06-search.spec.ts`** — the `/search` screen: a fresh case entry, added with a distinctive
+  marker, is found via a real Keyword-mode search; the ranking-mode toggle and the empty-query prompt.
 
 `fixtures/testData.ts` holds the shared, idempotent fixture-creation helpers (`ensureOrgExists`,
 `ensureClientExists`, `pickOrgIfPresent`) the org/client/case specs build on — two persistent

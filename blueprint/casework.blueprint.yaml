@@ -15,7 +15,7 @@
 # using the same `entities:cud:org` grant every `hr-admin` holds, invited or not.
 
 name: casework-hr-case-management
-version: "1.3.2"
+version: "1.4.0"
 description: >
   HR case management flagship — employer org -> employee case -> case entries + documents.
   Demonstrates BYO-IdP token exchange (Auth0), per-organization ownership compartments,
@@ -150,14 +150,17 @@ schemas:
         # filterable before, so every case search result carried its bare record type alone.
         # A reindex is needed for existing cases to pick this up.
         #
-        # Deliberately NOT applied to `status` below, even though the same reasoning would
-        # suggest it: the platform's own indexer writes an UNCONDITIONAL `status` key into
-        # every record's search metadata already (the record's own lifecycle status, a
-        # different value from this field), and a filterable payload field of the same name
-        # silently overwrites it — traced directly against the platform's own indexing code,
-        # not assumed. Search results here never need this field anyway (only `caseType` is
-        # read for the title), so leaving it non-filterable avoids the collision entirely
-        # rather than working around it.
+        # Deliberately NOT applied to `status` below — but for a plain product reason, not a
+        # platform one: search results here only ever read `caseType` for the title, so
+        # projecting `status` into search metadata would buy nothing. There is no collision
+        # to avoid. Records do not project their
+        # lifecycle status into search metadata, and `status` is not a reserved filterable
+        # field id on either the record or the document surface, so declaring it filterable
+        # would be legal here — it is simply not useful. (Field ids the platform DOES own on
+        # the record surface, and which a filterable field may not use, are `tenantId`,
+        # `owner_id`, `folderId`, `rootFolderId` and `recordType`; a schema that also allows
+        # the `document` surface adds `model_type` and `title`. A non-filterable field of any
+        # name is unaffected — which is why `folderId` below is fine.)
         filterable: true
       - fieldId: status
         fieldType: enum
@@ -294,13 +297,26 @@ schemas:
   # is filled in later from the client's own detail screen.
   #
   # No `entities:d:client` grant anywhere in this blueprint, deliberately — deleting a client while
-  # cases/notes/documents still reference it via `scope:client:<id>` would orphan them, and there's
-  # no composed/transactional endpoint to cascade the delete safely (the same gap `createCase.ts`'s
-  # own header comment documents for the create path — a platform limitation, not a bug to work
-  # around here). Deactivating a client uses the entity's own platform-native `status` field
-  # instead (`ACTIVE`/`SUSPENDED` — `SUSPENDED` entities are retained but blocked from new
-  # operations, per the SDK's own `EntityRequest.status` doc), which needs no schema field and no
-  # new grant beyond the ordinary `entities:u:client` update clause below.
+  # cases/notes/documents still reference it via `scope:client:<id>` would orphan them, and no
+  # single call can cascade the delete safely — the platform's composed-write path (a stored
+  # script committing as one transaction) reaches records, documents and folders, but not identity
+  # entities, so the client entity itself would remain a separate, un-rolled-back delete (the same
+  # boundary `createCase.ts`'s own header comment describes for the create path).
+  # Deactivating a client uses the entity's own platform-native `status` field
+  # instead (`ACTIVE`/`SUSPENDED`), which needs no schema field and no new grant beyond the
+  # ordinary `entities:u:client` update clause below.
+  #
+  # ⚠️ `status` IS A LABEL, AND NOTHING — PLATFORM OR APP — ENFORCES IT TODAY. The platform stores
+  # the value and hands it back unchanged: a `SUSPENDED` entity can still be read, updated and
+  # referenced by other records, exactly as an `ACTIVE` one can. This app does not add enforcement
+  # on top; it only SURFACES the value. Deactivating a client renders an "Archived" chip and flips
+  # the archive/reactivate button — that is the whole of it. A suspended client is still editable
+  # on its own detail screen, still listed, and still selectable when creating a case.
+  #
+  # So if you fork this and want deactivation to MEAN something, you have to build it: filter
+  # suspended clients out of the pickers, gate the case-create path, and refuse the writes you
+  # want refused. There is no platform guarantee to fall back on, and no client-side check here
+  # to inherit.
   - typeName: client_profile
     displayName: Client profile
     description: >
@@ -376,6 +392,110 @@ schemas:
     lookupFields:
       - targetUserId
 
+# Scripts this blueprint SHIPS. Source is inline by design, not a path: a script runs under live
+# authority, and keeping the source inside the bundle keeps what runs inside what was reviewed.
+#
+# ⚠️ That holds for the NEWEST version only. A script is versioned and immutable per version:
+# changing the source here ADDS a version, it never replaces one, and every earlier version stays
+# executable. The execute grant is name-only, so a caller may pin `scriptRef.version` to a
+# superseded version and run it under the same grant. Narrowing this script does not retire the
+# old source; only dropping the grant does. The writes are still the caller's own and pass the
+# caller's own data scopes either way.
+#
+# `create-case` exists to make a case atomic. Creating a case is a folder AND a record — the folder
+# must exist first so its id can be stamped onto the record — and driven from the browser those are
+# two independently-failing writes with no rollback, so a failure between them leaves an orphan
+# folder and no case. Executed as one script they commit together or not at all.
+#
+# It does NOT cover the client entity. A script's host object reaches records, documents and
+# folders; identity entities are not among them, so `createCase.ts` still resolves or creates the
+# client first and passes the resulting scopes in. That leg is unchanged and still un-rolled-back —
+# it is simply outside what a script can reach today.
+#
+# The script is the completion value of a top-level evaluation, so the body is plain statements
+# ending in a parenthesised object expression.
+#
+# It takes the case's `externalId` and `openedAt` from the caller rather than minting them itself.
+# `openedAt` is the caller's business date, and the script has no clock it should trust for one.
+# `caseExternalId` is the identity key BOTH writes derive from — the record's `externalId` and the
+# folder's `slug` — so a repeat of the same execution converges on the same case and the same
+# folder instead of accumulating either.
+#
+# What it does NOT do is make the app idempotent end to end: `createCase.ts` mints a fresh
+# externalId per invocation, so two clicks are two cases by design. The key makes a REDELIVERY of
+# one execution safe, not a re-submission of the form.
+scripts:
+  create-case:
+    declaredInputContract: >
+      { caseExternalId: string, folderName: string, caseType: string, openedAt: 'YYYY-MM-DD',
+      scopes: string[] (org:<id> and client:<id>), folderDescription?: string, assignedTo?: string }.
+      Descriptive only — nothing validates a call against this, so the script checks for itself.
+    source: |
+      var p = input.params;
+      if (!p) {
+        throw new Error('create-case: input.params is required.');
+      }
+
+      var required = ['caseExternalId', 'folderName', 'caseType', 'openedAt'];
+      for (var i = 0; i < required.length; i++) {
+        var k = required[i];
+        if (p[k] === undefined || p[k] === null || String(p[k]).trim() === '') {
+          throw new Error('create-case: input.params.' + k + ' is required.');
+        }
+      }
+      // Both dimensions travel together. A case stamps org:<id> AND client:<id>, and the
+      // create-side guard denies a write whose authorizing clause lacks a key for every
+      // dimension it stamps — so a partial scope list fails at the folder, before the record.
+      // `typeof === 'string'` is load-bearing: a bare 'org:1' has a .length of 5, so a
+      // length-only check admits it and the failure surfaces as an opaque deserialization 400
+      // from the folder create instead of this message.
+      if (!p.scopes || typeof p.scopes === 'string' || !p.scopes.length) {
+        throw new Error('create-case: input.params.scopes must be a non-empty array.');
+      }
+
+      // A DETERMINISTIC slug is what makes the folder half idempotent. With no slug the
+      // platform derives one and probes for a free name, suffixing -2, -3, ... so its own
+      // idempotency check can never match. The record create is idempotent on externalId, so
+      // without this a redelivered execution would echo the existing case while committing a
+      // second folder that no case points at. Derived from caseExternalId, so the same case
+      // always resolves to the same folder.
+      var slug = String(p.caseExternalId).toLowerCase().replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+/, '').replace(/-+$/, '').slice(0, 64).replace(/-+$/, '');
+      if (!slug) {
+        throw new Error('create-case: caseExternalId yields no usable folder slug.');
+      }
+      var folderBody = { name: p.folderName, slug: slug, scopes: p.scopes };
+      if (p.folderDescription) {
+        folderBody.description = p.folderDescription;
+      }
+      var folder = vectros.folders.create(folderBody);
+      if (!folder || !folder.id) {
+        // Nothing commits: throwing here rolls back the folder create too.
+        throw new Error('create-case: the folder create returned no id.');
+      }
+
+      var payload = {
+        caseType: p.caseType,
+        status: 'open',
+        openedAt: p.openedAt,
+        folderId: folder.id
+      };
+      if (p.assignedTo) {
+        payload.assignedTo = p.assignedTo;
+      }
+
+      var record = vectros.records.create({
+        typeName: 'case',
+        scopes: p.scopes,
+        externalId: p.caseExternalId,
+        payload: payload
+      });
+
+      // Ids only, as the completion value. The result is capped, and the caller re-reads
+      // through its own cache anyway.
+      ({ caseId: record.id, caseExternalId: record.externalId, folderId: folder.id });
+
+
 # The service principal's own profile — deliberately minimal. Real end-user access comes from
 # `roles:` below, assigned per-user at invite time, not from this.
 accessProfile:
@@ -417,7 +537,14 @@ roles:
     # outright unless the authorizing clause has a key for EVERY dimension it stamps.
     # `${{ any }}` (not a specific value) because the case doesn't exist yet to have its own
     # membership at create time.
-    - allowedActions: [records:c:case, records:c:case_note, documents:c]
+    #
+    # `documents:d` rides THIS clause rather than the delete clause below. Uploading a document
+    # is two steps -- create the row, then PUT the bytes -- and a failed PUT leaves a document
+    # with no file in it, which the app cleans up by deleting what it just created. Without
+    # `documents:d` that cleanup 403s and the empty document stays. Here the grant is bounded by
+    # `userId: ['${{ self.userId }}']`, so it reaches only a document the caller owns, not the
+    # org-wide document set the read clause below covers.
+    - allowedActions: [records:c:case, records:c:case_note, documents:cd]
       dataScope:
         userId: ['${{ self.userId }}']
         scope:org: ['${{ member.scope.org }}']
@@ -514,6 +641,26 @@ roles:
       dataScope:
         scope:org: ['${{ member.scope.org }}']
         scope:client: ['${{ any }}']
+    # Execute the `create-case` script — QUALIFIED to that one name, never a bare `scripts:x`.
+    # Execution gates on the action verb and the name alone and does NOT consult dataScope, so a
+    # bare grant would read "may run every script in this context", which is a far larger authority
+    # than this role needs. The dataScope below is therefore not what makes this safe; it is here
+    # because a clause needs one, and it copies the `folders:cr` clause's shape. It does not pin
+    # `userId` the way the record-create clause does; dataScope is not consulted on this verb.
+    #
+    # Those writes are still enforced per operation inside the execution, against THIS caller's
+    # scopes — the grant widens what can be COMPOSED, not what data is reachable, so this role
+    # cannot reach a case it could not already have created by hand.
+    #
+    # ⚠️ SIZE OF THE COMPOSITION. A synchronous execution runs with NO operation manifest, so the
+    # script may call ANY `vectros.records`/`documents`/`folders` verb this caller holds — not only
+    # the two this script happens to make. That is still bounded by the caller's own scopes, but it
+    # is wider than "folder create + record create", and it is what a reviewer of a CHANGED script
+    # source is implicitly approving.
+    - allowedActions: [scripts:x:create-case]
+      dataScope:
+        scope:org: ['${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
     # `org_membership` self-read. Every other read grant above (`entities:r:org`, the case/
     # case_note reads) requires the caller to already KNOW the org id — none of them let a
     # case-handler answer "which org(s) am I even a member of" in the first place. This narrow,
@@ -591,7 +738,15 @@ roles:
     # `documents:c` on its own create clause). Same scope shape as the record grants on this
     # clause — a founder/admin attaching a document to a case they can already fully CRUD needs
     # create authority here too.
-    - allowedActions: [records:c:case, records:c:case_note, documents:c]
+    #
+    # `documents:d` rides THIS clause, not the delete clause below, and the choice is the whole
+    # point. Uploading a document is two steps -- create the row, then PUT the bytes -- and a
+    # failed PUT leaves a document with no file in it. The app compensates by deleting what it
+    # just created, and without `documents:d` that cleanup 403s silently and the phantom stays.
+    # On this clause the grant is bounded by `userId: ['${{ self.userId }}']`, so it authorizes
+    # deleting a document the caller THEMSELVES owns -- which is exactly the compensation case --
+    # and not the org-wide document reach the read clause below covers.
+    - allowedActions: [records:c:case, records:c:case_note, documents:cd]
       dataScope:
         userId: ['${{ self.userId }}']
         scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
@@ -642,6 +797,13 @@ roles:
     # Create+read on folders, same reasoning as case-handler's identical grant above — an
     # org-founder (or invited hr-admin) creating a case needs to create that case's folder too.
     - allowedActions: [folders:cr]
+      dataScope:
+        scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
+        scope:client: ['${{ any }}']
+    # Execute `create-case` — same qualified grant as case-handler, same reasoning (see that
+    # role's own clause). hr-admin creates cases through the identical dialog, so withholding it
+    # here would leave the founder able to create a case by hand but not atomically.
+    - allowedActions: [scripts:x:create-case]
       dataScope:
         scope:org: ['${{ under.self.userId }}', '${{ member.scope.org }}']
         scope:client: ['${{ any }}']

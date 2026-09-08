@@ -62,7 +62,7 @@ function distinctOrgIdsFromScopes(records: ReadonlyArray<Pick<RecordResponse, 's
 }
 
 /**
- * `myUserId` — the caller's own `partnerUserId` (from `useScopeGate().identity`),
+ * `myUserId` — the caller's own `userId` (from `useScopeGate().identity`),
  * already resolved by the caller. `enabled` — gate the underlying queries off
  * a dialog's own `open` state, same convention every other on-demand query in
  * this app uses.
