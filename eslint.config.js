@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // ESLint flat config (ESLint 9+). Mirrors the other Vectros reference apps
-// (ui/admin-app, ui/app-vectros-ai) — one rule set across the family.
+// (the Admin App, app.vectros.ai) — one rule set across the family.
 //
 // - typescript-eslint recommended        — catches real TS bugs
 // - react-hooks recommended              — enforces the rules of hooks

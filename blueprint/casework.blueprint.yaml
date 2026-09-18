@@ -15,7 +15,7 @@
 # using the same `entities:cud:org` grant every `hr-admin` holds, invited or not.
 
 name: casework-hr-case-management
-version: "1.4.0"
+version: "1.4.1"
 description: >
   HR case management flagship — employer org -> employee case -> case entries + documents.
   Demonstrates BYO-IdP token exchange (Auth0), per-organization ownership compartments,
@@ -340,7 +340,12 @@ schemas:
       - fieldId: startDate
         fieldType: date
         required: false
-        renderHints: { label: Start date }
+        # `widget: date` pins this to a date-only picker (see recordForm.ts's
+        # `temporalInputKind`) — without it, a bare `date` field defaults to
+        # a datetime-local input, which sends a timezone-naive
+        # `YYYY-MM-DDTHH:mm` string the platform rejects as non-ISO. An
+        # employee's start date has no time component to begin with.
+        renderHints: { label: Start date, widget: date }
 
   # Backs `${{ member.scope.org }}` resolution. One row = one org-level grant. `targetUserId` is
   # the resolver's `membershipTargetField` — it must be a declared lookup field (below) or the

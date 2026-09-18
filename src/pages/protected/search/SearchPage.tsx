@@ -51,7 +51,7 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import { FormattedMessage, useIntl } from 'react-intl';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { hashKey, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiErrorAlert, LoadingBlock, SearchModeToggle, SearchResultCard } from '@vectros-ai/react';
 import type { SearchMode } from '@vectros-ai/react';
 
@@ -76,6 +76,7 @@ function metaString(meta: Record<string, unknown> | undefined, key: string): str
 
 export function SearchPage(): React.JSX.Element {
   const intl = useIntl();
+  const queryClient = useQueryClient();
   const { identity } = useScopeGate();
   const myUserId = identity.userId;
   const hasUserId = typeof myUserId === 'string' && myUserId !== '';
@@ -94,8 +95,10 @@ export function SearchPage(): React.JSX.Element {
   // it never hides the field, it lets `OrgPickerField` itself decide what to show).
   const effectiveOrgId = showOrgPicker ? orgId : (orgs[0]?.id ?? '');
 
+  const searchKeyFor = (term: string) => dataQueryKeys.search(effectiveOrgId, term, mode);
+  const searchKey = searchKeyFor(submittedQuery);
   const searchQuery = useInfiniteQuery({
-    queryKey: dataQueryKeys.search(effectiveOrgId, submittedQuery, mode),
+    queryKey: searchKey,
     queryFn: ({ pageParam }) =>
       vectrosApiClient().search.content({
         query: submittedQuery,
@@ -112,20 +115,34 @@ export function SearchPage(): React.JSX.Element {
       return loaded;
     },
     enabled: submittedQuery !== '' && effectiveOrgId !== '',
+    // Every search is billed, and react-query's AUTOMATIC refetches re-fetch every page an infinite
+    // query has loaded, exactly like `refetch()`. Two of them would re-walk a search the caller paged
+    // through without asking: returning to a stale cached term, and a network reconnect. So a search
+    // nobody is showing is dropped at once (returning to it runs page one, once), and nothing
+    // refetches on reconnect or focus. An explicit re-run goes through `rerunFromFirstPage` below.
+    gcTime: 0,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   });
+
+  // Re-run the current search from its FIRST page. Not `refetch()`: on an infinite query that
+  // re-fetches every page already loaded, so a caller who had pressed "Load more" several times would
+  // re-issue each of those billed searches. A fresh search starts at the first page anyway.
+  const rerunFromFirstPage = (): void => {
+    void queryClient.resetQueries({ queryKey: searchKey, exact: true });
+  };
 
   const handleSubmit = (event: React.FormEvent): void => {
     event.preventDefault();
     const next = queryInput.trim();
     // Re-submitting the SAME term leaves the query key unchanged, so react-query serves the cached
     // pages and issues no request. Indexing is asynchronous, so a search run in the seconds before a
-    // just-added entry is indexed would otherwise stay empty until the cache expired. Refetch
-    // explicitly. `effectiveOrgId` is checked because the query is `enabled` on it too: `refetch()`
-    // runs even on a disabled query, which would send `scope: "org:"` for a caller who submitted
-    // before picking an org, and the render ladder below would show the pick-an-org prompt rather
-    // than the resulting error.
-    if (next !== '' && next === submittedQuery && effectiveOrgId !== '') {
-      void searchQuery.refetch();
+    // just-added entry is indexed would otherwise stay empty until the cache expired. Re-run
+    // explicitly. Nothing is re-run before an org is picked: the query stays disabled until then, and
+    // the render ladder below shows the pick-an-org prompt. A re-submit while any fetch is in flight
+    // ("Load more" included) is dropped: resetting would cancel a search request already sent.
+    if (next !== '' && hashKey(searchKeyFor(next)) === hashKey(searchKey) && effectiveOrgId !== '') {
+      if (!searchQuery.isFetching) rerunFromFirstPage();
       return;
     }
     setSubmittedQuery(next);
@@ -136,7 +153,7 @@ export function SearchPage(): React.JSX.Element {
   const refreshButton = (
     <IconButton
       size="small"
-      onClick={() => void searchQuery.refetch()}
+      onClick={rerunFromFirstPage}
       disabled={searchQuery.isFetching}
       aria-label={intl.formatMessage({ id: 'search.refresh' })}
       title={intl.formatMessage({ id: 'search.refresh' })}

@@ -93,8 +93,40 @@ describe('AddCaseDocumentDialog', () => {
       'https://s3.example/put',
       expect.objectContaining({ method: 'PUT', body: file }),
     );
+    // The response names no required header, so none beyond Content-Type is sent.
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({ 'Content-Type': 'application/pdf' });
     await waitFor(() => expect(onUploaded).toHaveBeenCalled());
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('sends the header the upload response requires on the PUT, with its exact value', async () => {
+    // The presigned URL's signature can cover a conditional-write header; a PUT without it is
+    // rejected by S3.
+    const listSchemas = vi.fn().mockResolvedValue(pageOf([SCHEMA]));
+    const uploadDocument = vi.fn().mockResolvedValue({
+      id: 'doc_1',
+      uploadUrl: 'https://s3.example/put',
+      requiredHeaderName: 'If-None-Match',
+      requiredHeaderValue: '*',
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { onUploaded } = renderDialog({
+      schemas: { listSchemas },
+      documents: { uploadDocument },
+    });
+
+    const file = new File(['hello'], 'intake.pdf', { type: 'application/pdf' });
+    await pickFile(screen.getByLabelText('File'), file);
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Upload' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({
+      'Content-Type': 'application/pdf',
+      'If-None-Match': '*',
+    });
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
   });
 
   it('rejects a file over the 100 MB guard before ever calling uploadDocument', async () => {

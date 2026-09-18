@@ -35,8 +35,8 @@
       // Pin react/react-dom types to THIS app's single @types copy — the
       // flat lib .d.ts still imports `react` types, which tsc would
       // otherwise resolve from the repo root as a second @types/react
-      // identity (see ui/app-vectros-ai/tsconfig.json for the incident that
-      // motivated pinning this preventatively).
+      // identity. This exact pattern broke another Vectros reference app's
+      // build, so it's pinned here preventatively too.
       "react": ["./node_modules/@types/react"],
       "react/*": ["./node_modules/@types/react/*"],
       "react-dom": ["./node_modules/@types/react-dom"],

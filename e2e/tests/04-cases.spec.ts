@@ -82,6 +82,34 @@ test.describe('cases', () => {
     await expect(page.getByRole('button', { name: 'Upload document' })).toBeEnabled();
   });
 
+  test('case detail: uploads a file into the case, through the presigned S3 PUT', async ({ page }) => {
+    // The browser PUTs the bytes straight to a presigned S3 URL, and that PUT has to carry any
+    // header the upload response requires (the URL's signature can cover a conditional-write
+    // precondition). A PUT that gets it wrong is rejected by S3, which the API never sees: the
+    // dialog then stays open with its error and the file never lists on the case. Cases have no
+    // delete UI (see the header), so the uploaded document stays with its smoke case.
+    await createCaseForExistingClient(page, SMOKE_ORG_A, SMOKE_CLIENT_A);
+    const fileName = `smoke-case-upload-${Date.now()}.txt`;
+
+    await page.getByRole('button', { name: 'Upload document' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Upload a document' })).toBeVisible();
+    await dialog.getByLabel('File', { exact: true }).setInputFiles({
+      name: fileName,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Smoke-test case document. Safe to delete.'),
+    });
+    await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
+
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    // The case's document list is re-read after the upload; reload if that read
+    // raced the new document into the listing.
+    await expect(async () => {
+      if (!(await page.getByText(fileName).isVisible())) await page.reload();
+      await expect(page.getByText(fileName)).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 45_000 });
+  });
+
   test('status filter: All shows it, a non-matching status filters it out', async ({ page }) => {
     await createCaseForExistingClient(page, SMOKE_ORG_A, SMOKE_CLIENT_A);
 

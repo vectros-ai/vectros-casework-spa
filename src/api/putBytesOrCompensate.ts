@@ -10,6 +10,8 @@ export async function putBytesOrCompensate(
     readonly id?: string | undefined;
     readonly uploadUrl?: string | undefined;
     readonly created?: boolean | undefined;
+    readonly requiredHeaderName?: unknown;
+    readonly requiredHeaderValue?: unknown;
   },
   file: File,
   fileType: string,
@@ -19,10 +21,10 @@ export async function putBytesOrCompensate(
     if (!created.uploadUrl) throw new Error('upload did not return a presigned URL');
     // PUT the raw bytes straight to S3 — the presigned URL is self-authenticating, so NO
     // Authorization header (one would break the signature). Content-Type must match the fileType
-    // we declared.
+    // we declared, and any header the response requires is part of the signature too.
     const put = await fetch(created.uploadUrl, {
       method: 'PUT',
-      headers: { 'Content-Type': fileType },
+      headers: { 'Content-Type': fileType, ...presignedUploadHeaders(created) },
       body: file,
     });
     if (!put.ok) throw new Error(`file upload failed: ${put.status}`);
@@ -53,4 +55,25 @@ export async function putBytesOrCompensate(
     // client cannot tell the two apart, and leaving a phantom is the worse default.
     throw uploadError;
   }
+}
+
+/**
+ * The extra header a presigned upload URL requires, as named by the upload response.
+ *
+ * The platform can bake an S3 conditional-write precondition (for example `If-None-Match: *`, which
+ * makes the URL single-use) into the URL's own signature. A PUT that omits that header, or changes
+ * its value, fails signature validation with a 403 before the bytes are accepted.
+ *
+ * Read from the response, never hard-coded, and only when the response carries a name: an API
+ * version that does not return these fields gets no extra header, exactly as before. Checked at
+ * runtime because the client library in use may predate the fields and so cannot type them.
+ */
+export function presignedUploadHeaders(response: {
+  readonly requiredHeaderName?: unknown;
+  readonly requiredHeaderValue?: unknown;
+}): Record<string, string> {
+  const { requiredHeaderName, requiredHeaderValue } = response;
+  if (typeof requiredHeaderName !== 'string' || requiredHeaderName === '') return {};
+  if (typeof requiredHeaderValue !== 'string') return {};
+  return { [requiredHeaderName]: requiredHeaderValue };
 }

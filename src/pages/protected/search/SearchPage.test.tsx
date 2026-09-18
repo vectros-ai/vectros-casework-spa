@@ -6,10 +6,10 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { SearchPage } from './SearchPage';
 import { IntlProvider } from '../../../i18n/IntlProvider';
@@ -35,20 +35,20 @@ const GATE: ScopeGateValue = {
   can: () => true,
 };
 
-function testQueryClient(): QueryClient {
+function testQueryClient(staleTime = Infinity): QueryClient {
   return new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+      queries: { retry: false, gcTime: Infinity, staleTime },
       mutations: { retry: false },
     },
   });
 }
 
-function renderPage(client: unknown): void {
+function renderPage(client: unknown, opts: { staleTime?: number } = {}): void {
   mockedClient.mockReturnValue(client as never);
   render(
     <IntlProvider>
-      <QueryClientProvider client={testQueryClient()}>
+      <QueryClientProvider client={testQueryClient(opts.staleTime)}>
         <MemoryRouter initialEntries={['/search']}>
           <Routes>
             <Route path="/search" element={<SearchPage />} />
@@ -304,6 +304,200 @@ describe('SearchPage', () => {
     expect(await screen.findByText('Arrived on the retry.')).toBeInTheDocument();
   });
 
+  it('submitting a DIFFERENT term runs that term rather than re-running the old one', async () => {
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const content = vi.fn().mockResolvedValue({ results: [], totalResults: 0 });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    const box = await screen.findByRole('textbox', { name: 'Search' });
+    await userEvent.type(box, 'first');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(1));
+
+    await userEvent.type(box, 'x'); // the box now reads "firstx"
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(2));
+    expect(content).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'firstx', offset: 0 }));
+  });
+
+  it.each([
+    ['the refresh control', 'Re-run this search'],
+    ['re-submitting the same term', 'Search'],
+  ])('re-running via %s after "Load more" fetches ONLY the first page, never re-billing every loaded page', async (_trigger, rerunButton) => {
+    // A plain refetch() on an infinite query re-issues every loaded page in sequence: here that
+    // would be a second, offset-carrying search the caller never asked for, and every search is billed.
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const firstPage = Array.from({ length: 25 }, (_, i) => ({
+      documentId: `note_${i}`,
+      metadata: { recordType: 'case_note' },
+      contextText: `hit ${i}`,
+    }));
+    const content = vi
+      .fn()
+      .mockResolvedValueOnce({ results: firstPage, totalResults: 30 })
+      .mockResolvedValueOnce({
+        results: [{ documentId: 'note_25', metadata: { recordType: 'case_note' }, contextText: 'page two hit' }],
+        totalResults: 30,
+      })
+      .mockResolvedValue({ results: firstPage, totalResults: 30 });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await userEvent.click(await screen.findByRole('button', { name: /load more/i }));
+    expect(await screen.findByText('page two hit')).toBeInTheDocument();
+    expect(content).toHaveBeenCalledTimes(2);
+
+    await userEvent.click(screen.getByRole('button', { name: rerunButton }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(3));
+    expect(content.mock.calls[2]?.[0]).toEqual(expect.objectContaining({ offset: 0 }));
+    await waitFor(() => expect(screen.queryByText('page two hit')).not.toBeInTheDocument());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(content).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not send a duplicate request when the same term is re-submitted while a re-run is in flight', async () => {
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    let resolveRerun: (value: unknown) => void = () => {};
+    const content = vi
+      .fn()
+      .mockResolvedValueOnce({
+        results: [{ documentId: 'n_a', metadata: { recordType: 'case_note' }, contextText: 'First.' }],
+        totalResults: 1,
+      })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveRerun = resolve; }))
+      .mockResolvedValue({ results: [], totalResults: 0 });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByText('First.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Search' })); // re-run, stays in flight
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(2));
+    await userEvent.click(screen.getByRole('button', { name: 'Search' })); // must NOT restart it
+    await new Promise((r) => setTimeout(r, 50));
+    expect(content).toHaveBeenCalledTimes(2);
+
+    resolveRerun({
+      results: [{ documentId: 'n_b', metadata: { recordType: 'case_note' }, contextText: 'Second.' }],
+      totalResults: 1,
+    });
+    expect(await screen.findByText('Second.')).toBeInTheDocument();
+    expect(content).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a same-term re-submit while "Load more" is in flight, cancelling nothing', async () => {
+    // Resetting during a next-page search would cancel a request already sent (and billed) and
+    // re-issue page one on top of it.
+    const { listEntities, lookupRecords } = singleFounderOrg();
+    const firstPage = Array.from({ length: 25 }, (_, i) => ({
+      documentId: `note_${i}`,
+      metadata: { recordType: 'case_note' },
+      contextText: `hit ${i}`,
+    }));
+    let resolvePageTwo: (value: unknown) => void = () => {};
+    const content = vi
+      .fn()
+      .mockResolvedValueOnce({ results: firstPage, totalResults: 30 })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolvePageTwo = resolve; }))
+      .mockResolvedValue({ results: firstPage, totalResults: 30 });
+    renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } });
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'marker');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await userEvent.click(await screen.findByRole('button', { name: /load more/i }));
+    await waitFor(() => expect(content).toHaveBeenCalledTimes(2));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(content).toHaveBeenCalledTimes(2);
+
+    resolvePageTwo({
+      results: [{ documentId: 'note_25', metadata: { recordType: 'case_note' }, contextText: 'page two hit' }],
+      totalResults: 30,
+    });
+    expect(await screen.findByText('page two hit')).toBeInTheDocument();
+    expect(content).toHaveBeenCalledTimes(2);
+  });
+
+  describe('automatic refetches never re-walk loaded pages', () => {
+    // Production data goes stale after a finite time, and react-query's automatic refetches
+    // re-fetch every loaded page of an infinite query. `staleTime: 0` reproduces that staleness.
+    const pagedContent = () =>
+      vi.fn().mockImplementation(({ query, offset }: { query: string; offset: number }) =>
+        Promise.resolve(
+          offset === 0
+            ? {
+                totalResults: 30,
+                results: Array.from({ length: 25 }, (_, i) => ({
+                  documentId: `${query}_${i}`,
+                  metadata: { recordType: 'case_note' },
+                  contextText: `${query} hit ${i}`,
+                })),
+              }
+            : {
+                totalResults: 30,
+                results: [
+                  { documentId: `${query}_25`, metadata: { recordType: 'case_note' }, contextText: `${query} page two` },
+                ],
+              },
+        ),
+      );
+
+    it('returning to an earlier term after Load more runs its first page once', async () => {
+      const { listEntities, lookupRecords } = singleFounderOrg();
+      const content = pagedContent();
+      renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } }, { staleTime: 0 });
+      const box = await screen.findByRole('textbox', { name: 'Search' });
+
+      await userEvent.type(box, 'alpha');
+      await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+      await userEvent.click(await screen.findByRole('button', { name: /load more/i }));
+      expect(await screen.findByText('alpha page two')).toBeInTheDocument();
+
+      await userEvent.clear(box);
+      await userEvent.type(box, 'beta');
+      await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+      expect(await screen.findByText('beta hit 0')).toBeInTheDocument();
+
+      await userEvent.clear(box);
+      await userEvent.type(box, 'alpha');
+      await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+      expect(await screen.findByText('alpha hit 0')).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 50));
+
+      // alpha p1, alpha p2, beta p1, then alpha p1 once: never alpha p2 again.
+      expect(content.mock.calls.map(([a]) => `${a.query}@${a.offset}`)).toEqual([
+        'alpha@0',
+        'alpha@25',
+        'beta@0',
+        'alpha@0',
+      ]);
+    });
+
+    it('a network reconnect does not refetch a search with several pages loaded', async () => {
+      const { listEntities, lookupRecords } = singleFounderOrg();
+      const content = pagedContent();
+      renderPage({ identity: { listEntities }, records: { lookupRecords }, search: { content } }, { staleTime: 0 });
+
+      await userEvent.type(await screen.findByRole('textbox', { name: 'Search' }), 'alpha');
+      await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+      await userEvent.click(await screen.findByRole('button', { name: /load more/i }));
+      expect(await screen.findByText('alpha page two')).toBeInTheDocument();
+      expect(content).toHaveBeenCalledTimes(2);
+
+      try {
+        act(() => onlineManager.setOnline(false));
+        act(() => onlineManager.setOnline(true));
+        await new Promise((r) => setTimeout(r, 50));
+        expect(content).toHaveBeenCalledTimes(2);
+      } finally {
+        onlineManager.setOnline(true);
+      }
+    });
+  });
+
   it('a multi-org caller sees an org picker and must choose before searching', async () => {
     const listEntities = vi.fn().mockResolvedValue(
       pageOf([
@@ -323,6 +517,14 @@ describe('SearchPage', () => {
     // react-query reports `isPending: true` forever, so this must NOT be the loading spinner —
     // live-caught via the smoke suite before this check existed) shows a real prompt instead.
     await waitFor(() => expect(content).not.toHaveBeenCalled());
+    expect(screen.getByText('Pick an org above to run this search.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Searching…')).not.toBeInTheDocument();
+
+    // Re-submitting the same term before an org is picked still sends nothing, and still shows
+    // the prompt rather than a loading state.
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(content).not.toHaveBeenCalled();
     expect(screen.getByText('Pick an org above to run this search.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Searching…')).not.toBeInTheDocument();
   });

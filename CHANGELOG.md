@@ -4,6 +4,40 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.1] - 2026-09-17
+
+### Fixed
+
+- **Creating a client with a start date no longer fails with a non-ISO-format error.** The field
+  had no `date`-only widget hint, so it defaulted to a datetime-local picker; the browser's
+  timezone-naive `YYYY-MM-DDTHH:mm` value failed the platform's ISO validation on save. An
+  employee's start date has no time component to begin with — it's now a plain date picker, and
+  the value it sends (`YYYY-MM-DD`) is accepted. ⚠️ **Re-apply this blueprint** (this app's own
+  Quickstart step 3) for existing deployments — this is a `renderHints` change on the
+  `client_profile` schema, fetched live from the platform rather than baked into this app's build.
+- **Uploading a document to a case now works against an API that makes presigned upload URLs
+  single-use.**
+  Such an API bakes a conditional-write header into the upload URL's signature and names it in the
+  upload response (`requiredHeaderName` / `requiredHeaderValue`); a PUT without that header is
+  rejected by storage with a 403. The app now sends whatever header the response names, and no
+  extra header when the response names none, so it works against API versions on either side of
+  the change.
+- **Re-running a search no longer re-issues every page already loaded.** Refreshing a search, or
+  submitting the same term again, used to re-fetch each page that "Load more" had loaded, one
+  search request per page. It now starts again from the first page. A repeat submit while a search
+  is still running is ignored rather than sending a duplicate request. Going back to an earlier
+  search, or the network reconnecting, no longer re-fetches every loaded page either: going back
+  runs its first page once, and a reconnect runs nothing.
+- **Three source comments carried repo-relative internal paths** to sibling reference apps
+  (a type-pinning comment, the ESLint config header, and a pagination comment) that resolve to
+  nothing in this app's own public mirror. Reworded to state the same guidance descriptively instead; no
+  behavioral change.
+
+### Changed
+
+- **Repinned to `@vectros-ai/sdk` 0.44.0.** No API surface this app uses changed shape beyond the
+  presigned-upload fix already noted above.
+
 ## [1.2.0] - 2026-09-07
 
 ### Changed

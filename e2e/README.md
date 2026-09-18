@@ -37,7 +37,9 @@ the same tradeoff most e2e suites make elsewhere.
 - **No "Ask" (RAG) coverage.** `CaseAskPanel` (the case-scoped Ask drawer) isn't exercised.
   Streaming SSE interactions are a heavier automation surface than the rest of this suite, and
   there's no standalone Ask page (it's reached only from a case's detail screen).
-- **No document upload coverage.** `AddCaseDocumentDialog` isn't exercised.
+- **Document upload is covered on the happy path only.** `04-cases.spec.ts` uploads a file into a
+  fresh case through `AddCaseDocumentDialog`, but the app has no delete-case or delete-document UI,
+  so each run leaves that document behind with its smoke case.
 - **No `case-handler`-role coverage.** Every spec runs as the smoke user, provisioned as
   `hr-admin` — the broadest role, covering the most screens. `case-handler`'s own, narrower access
   paths (self-founded-only clients, membership-gated reach) are untested here.
