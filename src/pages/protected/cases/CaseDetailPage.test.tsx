@@ -118,7 +118,7 @@ describe('CaseDetailPage', () => {
     expect(await screen.findByRole('heading', { name: 'grievance' })).toBeInTheDocument();
     expect(getRecord).toHaveBeenCalledWith({ id: 'case_1' });
     expect(await screen.findByText('First contact made.')).toBeInTheDocument();
-    // Looked up by this exact case's own id — the platform's `filterByDataScope`
+    // Looked up by this exact case's own id — the platform's data-scope
     // narrowing per-role (org-only for hr-admin, org+client for case-handler)
     // still runs underneath; this only pins WHICH rows are asked for.
     expect(lookupRecords).toHaveBeenCalledWith({ type: 'case_note', field: 'caseId', value: 'case_ext_1' });

@@ -47,7 +47,8 @@ This app ships an Auth0 adapter. To swap identity providers:
    provider swap stays a one-file change.
 4. Update [`blueprint/casework.blueprint.yaml`](../blueprint/casework.blueprint.yaml)'s `issuers:`
    block to match your provider's issuer/JWKS/audience shape, and re-apply it
-   (`vectros blueprint apply`) — the platform trusts tokens by issuer, not by "was built with
+   (`vectros blueprint apply blueprint/casework.blueprint.yaml --tenant test`, CLI 0.23.0 or later; a new issuer then needs
+   `docs/AUTH0-SETUP.md` step 5-verify) — the platform trusts tokens by issuer, not by "was built with
    Auth0."
 
 ## Data model

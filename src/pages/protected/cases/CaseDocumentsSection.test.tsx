@@ -120,4 +120,69 @@ describe('CaseDocumentsSection', () => {
       expect(openSpy).toHaveBeenCalledWith('https://s3.example/get', '_blank', 'noopener,noreferrer'),
     );
   });
+
+  // The download link comes back from the API as a presigned storage URL. It is opened only
+  // when it is https: a script scheme handed to window.open would run in this origin.
+  it.each([
+    ['javascript:', 'javascript:alert(document.domain)'],
+    ['a mixed-case script scheme', 'JaVaScRiPt:alert(1)'],
+    ['data:', 'data:text/html,<script>alert(1)</script>'],
+    ['plain http', 'http://s3.example/get/doc_1'],
+    ['protocol-relative', '//evil.example/get'],
+    ['a relative path', '/get/doc_1'],
+  ])('does not open a download link that is %s, and says it was refused (no retry advice)', async (_name, downloadUrl) => {
+    const user = userEvent.setup();
+    const lookupDocuments = vi.fn().mockResolvedValue(
+      pageOf([{ id: 'doc_1', title: 'Intake form.pdf', fileSize: 2048, indexStatus: 'INDEXED' }]),
+    );
+    const getDocumentDownloadUrl = vi.fn().mockResolvedValue({ downloadUrl });
+    renderSection({ documents: { lookupDocuments, getDocumentDownloadUrl } });
+    openSpy.mockClear();
+
+    await user.click(await screen.findByRole('button', { name: 'Intake form.pdf' }));
+
+    await waitFor(() => expect(getDocumentDownloadUrl).toHaveBeenCalledWith({ id: 'doc_1' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('not a secure (https) address');
+    expect(alert).not.toHaveTextContent("Couldn't get a download link");
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('says it could not get a link (not that the address was refused) when the API returns none', async () => {
+    const user = userEvent.setup();
+    const lookupDocuments = vi.fn().mockResolvedValue(
+      pageOf([{ id: 'doc_1', title: 'Intake form.pdf', fileSize: 2048, indexStatus: 'INDEXED' }]),
+    );
+    const getDocumentDownloadUrl = vi.fn().mockResolvedValue({ downloadUrl: '' });
+    renderSection({ documents: { lookupDocuments, getDocumentDownloadUrl } });
+    openSpy.mockClear();
+
+    await user.click(await screen.findByRole('button', { name: 'Intake form.pdf' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't get a download link");
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('opens an https download link with the checked (normalised) value (control)', async () => {
+    const user = userEvent.setup();
+    const lookupDocuments = vi.fn().mockResolvedValue(
+      pageOf([{ id: 'doc_1', title: 'Intake form.pdf', fileSize: 2048, indexStatus: 'INDEXED' }]),
+    );
+    const getDocumentDownloadUrl = vi
+      .fn()
+      .mockResolvedValue({ downloadUrl: '  HTTPS://S3.Example/get?X-Amz-Signature=abc  ' });
+    renderSection({ documents: { lookupDocuments, getDocumentDownloadUrl } });
+    openSpy.mockClear();
+
+    await user.click(await screen.findByRole('button', { name: 'Intake form.pdf' }));
+
+    await waitFor(() =>
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://s3.example/get?X-Amz-Signature=abc',
+        '_blank',
+        'noopener,noreferrer',
+      ),
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

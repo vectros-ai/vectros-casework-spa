@@ -117,6 +117,40 @@ URLs**, and **Allowed Web Origins** — `AUTH0-SETUP.md` step 4 covers the exact
 per-application settings, so add every environment's URL to the same comma-separated list rather
 than needing separate configuration per API.
 
+## 8. Security response headers
+
+The same `vercel.json` sets security headers on every response: a `Content-Security-Policy`,
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Strict-Transport-Security`,
+`Referrer-Policy`, `Permissions-Policy` (camera, microphone, location, payment and USB off) and
+`X-XSS-Protection: 0`. The app keeps an Auth0 refresh token in the browser's local storage, so keeping
+injected script out of the page matters, and the policy allows scripts only from the app's own origin
+(no inline scripts, no `eval`), no framing, and network calls over https only.
+
+Three things to know if you fork it:
+
+- **`Strict-Transport-Security` deliberately has no `includeSubDomains` or `preload`.** This is a
+  template you deploy under your own domain; those two would bind every subdomain of it (and, for
+  `preload`, a browser-side list that is slow to undo). Add them once you know the whole domain is
+  https-only.
+
+- **`connect-src 'self' https:` is deliberately broad.** Your Auth0 domain, your API URL and the host
+  that file uploads go to are set per deployment, and a static file can't name them. If you tighten it,
+  list all three: for example `connect-src 'self' https://your-tenant.us.auth0.com https://api.vectros.ai
+  https://<your-storage-host>`. A document upload sends its bytes straight to a presigned storage URL
+  on a different host from the API (look at the `uploadUrl` the API returns); leave that host out and
+  every upload is blocked by the browser.
+- **Anything you add from another host needs its origin in the matching directive.** An image, a font,
+  a script or an embedded frame from a host the policy does not list is blocked by the browser.
+
+To see what your deployment actually sends (the headers only apply once deployed, and a setting in the
+Vercel dashboard can add to or override them):
+
+```bash
+curl -sI https://<your-deployed-url>/ | grep -iE 'content-security|x-frame|x-content-type|strict-transport|referrer|permissions-policy|x-xss'
+```
+
+If you move to a different static host, set the same headers there.
+
 ## Test vs. production
 
 Repeat this whole doc for your production Vercel project once you're ready — separate project,

@@ -74,7 +74,7 @@ Vercel dashboard's own environment variables instead.
 > [!NOTE]
 > Some npm 10.x versions crash on `npm install` with `Cannot read properties of null (reading
 > 'edgesOut')` while resolving Vitest's own optional peer dependencies — a known, still-open npm
-> bug ([npm/cli#9787](https://github.com/npm/cli/issues/9787)), not a real conflict in this
+> bug ([npm/cli issue 9787](https://github.com/npm/cli/issues/9787)), not a real conflict in this
 > app's dependencies. If you hit it, `npm install --legacy-peer-deps` installs cleanly.
 
 **2. Set up Auth0** — a tenant, an application, an API, and the (easy-to-miss) step that
@@ -83,7 +83,9 @@ authorizes one for the other. Full walkthrough: [`docs/AUTH0-SETUP.md`](docs/AUT
 **3. Apply this app's blueprint to your Vectros deployment** — provisions the roles, schemas, and
 trusted-issuer registration this app needs; creates no users yet.
 [`docs/AUTH0-SETUP.md`](docs/AUTH0-SETUP.md) step 5 has the exact command
-(`vectros bootstrap --blueprint blueprint/casework.blueprint.yaml ...`).
+(`vectros blueprint apply blueprint/casework.blueprint.yaml --tenant test ...`, `@vectros-ai/cli` 0.23.0 or later). On platform 0.45.0 and later the
+new issuer then starts `pending_verification` and accepts no sign-in until you prove you control the Auth0
+tenant: that is step 5-verify in the same doc, and it must be done before sign-in works.
 
 **4. Deploy to Vercel** (or any static host — see that doc for the general shape). Full
 walkthrough: [`docs/VERCEL-SETUP.md`](docs/VERCEL-SETUP.md). You'll need this step's deployed URL

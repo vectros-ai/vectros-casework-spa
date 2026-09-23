@@ -57,7 +57,7 @@ function founderOfOneOrg(): ReturnType<typeof vi.fn> {
 
 /** Mocks the case-list's own per-org `listRecords` fan-out: filters a case fixture list by the
  *  `scope` query param (`org:<id>`), mirroring what the real per-org call + the platform's
- *  row-level `filterByDataScope` narrowing would return. */
+ *  row-level data-scope narrowing would return. */
 function listRecordsByOrg(cases: ReadonlyArray<{ scopes?: string[] }>): ReturnType<typeof vi.fn> {
   return vi
     .fn()

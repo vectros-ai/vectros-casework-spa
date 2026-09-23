@@ -11,7 +11,7 @@
 // Two rules the shape depends on, both easy to get wrong:
 //
 //  1. NEVER terminate on a short or empty page. Server-side scope filtering
-//     (`filterByDataScope`, narrowing a case-handler's view down from the
+//     (narrowing a case-handler's view down from the
 //     org-wide page) is applied AFTER that page's cursor is captured, so a
 //     page can come back short — or completely empty — with rows still
 //     behind it. Stopping on `data.length < limit` re-introduces exactly the

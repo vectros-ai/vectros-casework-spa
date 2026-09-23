@@ -1,3 +1,5 @@
+import { httpsUrlOrNull } from '../lib/httpsUrl';
+
 /**
  * PUT the bytes for a document row that ALREADY EXISTS, and compensate that row if the transfer
  * fails. Exported and taken as a parameter rather than inlined in the mutation so the error a caller
@@ -18,11 +20,14 @@ export async function putBytesOrCompensate(
   deleteDocument: (args: { id: string }) => Promise<unknown>,
 ): Promise<void> {
   try {
-    if (!created.uploadUrl) throw new Error('upload did not return a presigned URL');
+    // The URL came from the API and the bytes go to whatever it names, so only an https address is
+    // used, and the value written to is the one that was checked.
+    const uploadUrl = httpsUrlOrNull(created.uploadUrl);
+    if (!uploadUrl) throw new Error('upload did not return an https presigned URL');
     // PUT the raw bytes straight to S3 — the presigned URL is self-authenticating, so NO
     // Authorization header (one would break the signature). Content-Type must match the fileType
     // we declared, and any header the response requires is part of the signature too.
-    const put = await fetch(created.uploadUrl, {
+    const put = await fetch(uploadUrl, {
       method: 'PUT',
       headers: { 'Content-Type': fileType, ...presignedUploadHeaders(created) },
       body: file,

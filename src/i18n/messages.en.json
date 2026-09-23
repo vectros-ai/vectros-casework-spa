@@ -132,6 +132,7 @@
   "caseDetail.documentsLoadError": "Couldn't load documents",
   "caseDetail.documentsEmpty": "No documents yet.",
   "caseDetail.documentDownloadError": "Couldn't get a download link for that document.",
+  "caseDetail.documentDownloadRefused": "The download link for that document is not a secure (https) address, so it was not opened. Trying again will not change that; please contact support.",
   "caseDetail.uploadDocumentCta": "Upload document",
   "caseDetail.uploadDocumentNoFolder": "This case predates document folders, so uploads aren't available for it.",
   "addCaseDocument.title": "Upload a document",

@@ -4,8 +4,9 @@
 # identity namespaces cases live under, the record/document schemas, the service principal's
 # own minimal profile, the two roles real users get assigned, and the trusted Auth0 issuer for
 # the token-exchange sign-in flow. Applied once, by whoever is standing up a deployment, via
-# `vectros blueprint apply` (or `vectros bootstrap`, which also mints the service principal's
-# key) — this file is the deliverable, not a description of one.
+# `vectros blueprint apply` (which mints no key: this app's browser sign-in needs none; `vectros bootstrap
+# --blueprint` also works and additionally mints the service principal's key) — this file is the deliverable,
+# not a description of one.
 #
 # What this blueprint deliberately does NOT do: create any organizations, cases, or users —
 # including the first admin. This is a Shape 1, Captive Enterprise deployment (no self-signup at
@@ -61,6 +62,10 @@ inputs:
 # gated by `hr-admin`'s member-lifecycle capability below. **There is exactly ONE onboarding
 # mechanism in this app** — the only thing that differs for person #1 is which credential sends the
 # invite, never a different code path.
+#
+# On platform 0.45.0 and later this issuer starts `pending_verification` and accepts no sign-in until you prove
+# you control the Auth0 tenant: `vectros blueprint apply` finishes (exit 0) and ends its output with the challenge and
+# the `vectros issuers verify` command. docs/AUTH0-SETUP.md step 5-verify walks through it.
 issuers:
   - issuerId: primary
     issuer: "https://${{ inputs.auth0Domain }}/"
@@ -71,7 +76,10 @@ issuers:
     # is a derived value, not a new input. Lets the platform fall back to fetching `email`
     # from the userinfo endpoint when the presented access token doesn't carry it directly
     # (see AUTH0-SETUP.md's note on why the access token, not the ID token, is what gets
-    # presented), so no Auth0 Action / post-login hook is required for a standard tenant.
+    # presented), so no Auth0 Action / post-login hook is needed for EMAIL resolution on a standard tenant.
+    # (Registering the issuer itself is a separate two-step: on Vectros 0.45.0+ it starts pending
+    # verification and needs a one-time post-login Action that stamps a verification claim — see
+    # AUTH0-SETUP.md step 5-verify.)
     userinfoUri: "https://${{ inputs.auth0Domain }}/userinfo"
 
 # `org` and `client` are the two identity namespaces this app's data model is organized around:
@@ -512,7 +520,7 @@ accessProfile:
 # not a style choice: the platform's role-id validation pattern is `^[a-z][a-z0-9-]{2,30}$`
 # (lowercase start, lowercase/digits/hyphens only, 3-31 chars total) — an underscore, an uppercase
 # letter, or a leading digit all reject outright, so `case_handler`/`hr_admin` would fail the
-# moment `blueprint apply`/`bootstrap` tried to create either role. Do not "clean up" these names
+# moment `vectros blueprint apply` tried to create either role. Do not "clean up" these names
 # back to underscores for readability, and keep any new role id within the same pattern.
 roles:
   # Creates and manages cases within their own org. A user with more than one org membership
@@ -901,7 +909,7 @@ roles:
     # tenant-wide user scope on any blueprint role, unconditionally and with no override — by
     # design, since a human who genuinely needs a control-plane-scoped credential is expected to
     # mint one deliberately through the developer portal, never via an automated blueprint loader.
-    # Adding it here would break `vectros bootstrap`/`vectros blueprint apply` outright for this
+    # Adding it here would break `vectros blueprint apply` outright for this
     # entire blueprint, not just this one clause — a structural constraint, not a sign-off
     # question. As shipped, the Team roster resolves a member's email only when the platform is
     # able to on its own; when it can't, the UI falls back to showing the member's bare principal

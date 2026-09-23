@@ -1,6 +1,6 @@
 {
   "name": "vectros-casework-spa",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "license": "Apache-2.0",
   "description": "HR case management — a forkable, no-backend reference app for the Vectros platform. Auth0 sign-in, a Vectros blueprint for provisioning, and zero application server: fork it, point it at your own Auth0 tenant, and ship.",
   "type": "module",
@@ -29,12 +29,12 @@
     "@mui/material": "7.3.11",
     "@tanstack/react-query": "5.100.14",
     "@tanstack/react-query-devtools": "5.100.14",
-    "@vectros-ai/sdk": "^0.44.0",
+    "@vectros-ai/sdk": "^0.45.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-intl": "10.1.11",
     "react-router": "^8.3.0",
-    "@vectros-ai/react": "^0.13.0"
+    "@vectros-ai/react": "^0.14.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.6.3",

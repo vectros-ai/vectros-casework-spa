@@ -41,7 +41,15 @@ import { vectrosApiClient } from '../../../api/vectrosApi';
 import { dataQueryKeys } from '../../../lib/dataQueryKeys';
 import { drainPages } from '../../../lib/drainPages';
 import { formatBytes } from '../../../lib/formatBytes';
+import { httpsUrlOrNull } from '../../../lib/httpsUrl';
 import { AddCaseDocumentDialog } from './AddCaseDocumentDialog';
+
+/** The API returned no download address (`refused` false) or one that is not https (`refused` true). */
+class RefusedDownloadUrlError extends Error {
+  constructor(readonly refused: boolean) {
+    super(refused ? 'download URL is not https' : 'no download URL');
+  }
+}
 
 interface CaseDocumentsSectionProps {
   readonly caseId: string;
@@ -64,7 +72,9 @@ export function CaseDocumentsSection({
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | undefined>(undefined);
-  const [downloadError, setDownloadError] = useState(false);
+  // Why the last download did not open: the link could not be fetched (worth retrying), or the API
+  // returned an address that is not https and was refused (retrying cannot change that).
+  const [downloadError, setDownloadError] = useState<'failed' | 'refused' | null>(null);
 
   const documentsQuery = useQuery({
     queryKey: dataQueryKeys.caseDocuments(caseId),
@@ -86,17 +96,23 @@ export function CaseDocumentsSection({
   const downloadMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await vectrosApiClient().documents.getDocumentDownloadUrl({ id });
-      if (!res.downloadUrl) throw new Error('no download URL');
-      return res.downloadUrl;
+      // Opened only when it is an https URL; the value returned is the one that was checked.
+      const url = httpsUrlOrNull(res.downloadUrl);
+      if (!url) {
+        // An address that is present but not https is refused for good; none at all is a failure to get it.
+        throw new RefusedDownloadUrlError(Boolean(res.downloadUrl));
+      }
+      return url;
     },
     onMutate: (id) => {
       setDownloadingId(id);
-      setDownloadError(false);
+      setDownloadError(null);
     },
     onSuccess: (url) => {
       window.open(url, '_blank', 'noopener,noreferrer');
     },
-    onError: () => setDownloadError(true),
+    onError: (error) =>
+      setDownloadError(error instanceof RefusedDownloadUrlError && error.refused ? 'refused' : 'failed'),
     onSettled: () => setDownloadingId(undefined),
   });
 
@@ -139,7 +155,9 @@ export function CaseDocumentsSection({
       )}
       {downloadError && (
         <Alert severity="error" role="alert">
-          <FormattedMessage id="caseDetail.documentDownloadError" />
+          <FormattedMessage
+            id={downloadError === 'refused' ? 'caseDetail.documentDownloadRefused' : 'caseDetail.documentDownloadError'}
+          />
         </Alert>
       )}
       {documentsQuery.isSuccess && documents.length === 0 && (

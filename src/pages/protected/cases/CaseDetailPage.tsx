@@ -26,7 +26,7 @@
 //
 // **The entries query is `lookupRecords({type:'case_note', field:'caseId',
 // value: caseExternalId})`** — no client-side filtering needed any more; the
-// platform's own `filterByDataScope` narrowing per-role (org-only for
+// platform's own data-scope narrowing per-role (org-only for
 // hr-admin, org+client for case-handler) still runs underneath, unaffected
 // by this fix — this only changes WHICH rows the query asks for, not how
 // they're authorized. (`case-handler`'s two-real-dimension `scope:org`+

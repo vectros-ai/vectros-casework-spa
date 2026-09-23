@@ -4,6 +4,60 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.0] - 2026-09-22
+
+### Security
+
+- **A case document's download link is opened only when it is an https URL.** Clicking a document asks
+  the API for a short-lived download link and opens the result in a new tab. It now opens the link only
+  when it is an https URL. A link that is present but not https is refused with its own message ("not a
+  secure (https) address", with no retry advice, because retrying cannot change it); no link at all still
+  shows "couldn't get a download link".
+- **The address a case document's file is uploaded to is used only when it is an https URL.** Adding a
+  document sends the file to a presigned storage URL the API returns. The upload now goes ahead only for
+  an https address, and the address used is the one that was checked; anything else stops the upload,
+  cleans up the document row this attempt created, and shows the usual error.
+- **The deployed app now sends security response headers.** `vercel.json` sets a
+  `Content-Security-Policy` (scripts only from the app's own origin, no inline scripts or `eval`, no
+  framing, https-only network calls), `X-Content-Type-Options`, `X-Frame-Options`,
+  `Strict-Transport-Security`, `Referrer-Policy`, `Permissions-Policy` and `X-XSS-Protection: 0`. The app
+  keeps a long-lived sign-in token in the
+  browser, so this makes it harder for an injected script to run at all. `connect-src` is deliberately
+  broad (any https host), so it does not limit where a script that did run could send data. If you deploy
+  somewhere other than Vercel, set the same headers there; if you fork the app, you can tighten
+  `connect-src` to your own origins (see the Vercel setup guide for which ones). `Strict-Transport-Security`
+  deliberately leaves out `includeSubDomains` and `preload`, because this is a template you deploy under
+  your own domain; add them once you know the whole domain is https-only.
+
+### Changed
+
+- **The Auth0 setup guide gains a verification step for Vectros 0.45.0 and later.** A newly registered
+  trusted issuer now starts as *pending verification* and accepts no sign-ins until you prove you control
+  the Auth0 application. The guide (step 5-verify) shows the post-login Action that adds the one-time
+  challenge to your tokens and the `vectros issuers verify` command that completes verification
+  (`@vectros-ai/cli` 0.23.0 or later); `vectros blueprint apply` finishes and ends its output with the challenge. An issuer
+  registered before 0.45.0 is already active and needs nothing. The step gives the Auth0 click-path (create the
+  Action and its secret, deploy it, add it to the post-login flow, optionally limit it to this application),
+  says to sign in again after the Action is in place, and explains the most common refusals from `issuers verify`. The blueprint and the guide now name
+  `vectros blueprint apply` as the command that applies the blueprint (it mints no key, which this app never
+  uses), where they previously named a different one.
+
+- **The setup guide, README and blueprint apply the blueprint with `vectros blueprint apply`** (`@vectros-ai/cli`
+  0.23.0 or later) rather than `vectros bootstrap`. It provisions everything the blueprint declares without
+  minting a key or touching your MCP client configuration, neither of which this app uses. `--tenant test|live` is
+  required, it shows the account and tenant it is about to change and asks first, and once the service principal
+  exists, re-running it (after an edit, or from CI) needs `--confirm-existing-principal` with `--yes` (or with no
+  terminal); at a terminal it asks instead. It deletes nothing unless you also pass `--prune`.
+
+- **Repinned to `@vectros-ai/sdk` 0.45.0.** No client-side behavior change from the pin bump alone (0.45.0's own
+  breaking change, the `pending_verification` issuer state, is covered separately above by the Auth0 setup guide).
+
+### Fixed
+
+- **The install-troubleshooting note's linked npm issue reference reads more clearly.** Same link,
+  reworded text — the note about the npm 10.x / Vitest peer-dependency `npm install` crash, just above
+  the Auth0 setup steps.
+
 ## [1.2.1] - 2026-09-17
 
 ### Fixed

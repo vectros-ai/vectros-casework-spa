@@ -122,11 +122,18 @@ above to match before your next login.
 Apply this app's blueprint ([`blueprint/casework.blueprint.yaml`](../blueprint/casework.blueprint.yaml)) with your Auth0 values as inputs, run from this app's own directory:
 
 ```bash
-vectros bootstrap --blueprint blueprint/casework.blueprint.yaml --tenant test \
+vectros blueprint apply blueprint/casework.blueprint.yaml --tenant test \
   --set companyName="Your Company" \
   --set auth0Domain=<your Auth0 domain> \
   --set auth0Audience=<the API identifier from step 2>
 ```
+
+`blueprint apply` (`@vectros-ai/cli` 0.23.0 or later) provisions everything in the blueprint without minting a key,
+which this app never uses.
+`--tenant` is required and there is no default. It prints the account, tenant and context it is about to change
+and asks first. Once the blueprint's service principal exists, re-running it (after editing the blueprint, or from
+CI) needs `--confirm-existing-principal` together with `--yes` (or with no terminal); at a terminal it asks instead.
+It deletes nothing unless you also pass `--prune`.
 
 This tells Vectros to trust **access tokens** issued by your Auth0 tenant for the given audience,
 and is what the token-exchange endpoint checks against when this app trades an Auth0 session for
@@ -135,6 +142,69 @@ different `aud` claims (the access token's `aud` is the API identifier from step
 is your Client ID), and only the access token's `aud` matches what you register here. If you're
 adapting this flow for your own app, sending the ID token instead is a real, easy mistake to make
 and produces an opaque token-exchange rejection with no indication of which token was the problem.
+
+### 5-verify. Prove you control the Auth0 tenant (Vectros 0.45.0+)
+
+A newly registered issuer starts as **`pending_verification`** and accepts no token until you prove you
+control the Auth0 application, so a sign-in is refused until this step is done. (An issuer registered before
+0.45.0 is already active and needs nothing here.) `vectros blueprint apply` in step 5 still finishes, and exits `0`
+because the apply itself succeeded; **the challenge and the exact command below are the end of its output, on
+stderr**. A script that must not carry on over a pending issuer can pass `--require-verified-issuers`,
+which makes `apply` exit `4` in that case instead. Needs `@vectros-ai/cli` 0.23.0 or later.
+
+1. **Note the challenge.** `blueprint apply` printed a claim name (`https://vectros.ai/claims/issuer_challenge`), a
+   one-time value and an expiry. Read them back at any time (`primary` is the `issuerId` in the blueprint):
+
+   ```bash
+   vectros issuers get primary --context casework --tenant test
+   ```
+2. **Add an Auth0 Action.** In Auth0, add a **post-login Action** that stamps the value into both tokens:
+   **Actions → Library → Build Custom**, trigger **Login / Post Login**. Paste the code below, then use the key
+   icon to **Add Secret** named `VECTROS_ISSUER_NONCE` whose value is the one-time value from step 1.
+
+   ```js
+   exports.onExecutePostLogin = async (event, api) => {
+     const claim = 'https://vectros.ai/claims/issuer_challenge';
+     api.idToken.setCustomClaim(claim, event.secrets.VECTROS_ISSUER_NONCE);
+     api.accessToken.setCustomClaim(claim, event.secrets.VECTROS_ISSUER_NONCE);
+   };
+   ```
+
+   Click **Deploy**, then go to **Actions → Triggers → post-login**, drag the Action between *Start* and
+   *Complete*, and click **Apply**. A deployed Action that is not in the flow never runs. Actions apply to every
+   application in the tenant; to limit this one to Casework, add
+   `if (event.client.client_id !== '<your Client ID>') return;` as the first line of the function.
+3. **Sign in once, after the Action is in the flow, and capture the access token.** A token from an earlier
+   login does not carry the claim, so sign in again. Sign in through this app's Auth0 login with your browser's
+   developer tools open; the response to the `POST https://<your Auth0 domain>/oauth/token` request carries
+   an `access_token`. (The app's own token exchange with Vectros is refused while the issuer is pending; that
+   is expected.) Save the access token to a file and answer the challenge. Use the **access token**, not the ID
+   token: the ID token's audience is your Client ID, which is not the audience this issuer is registered with:
+
+   ```bash
+   vectros issuers verify primary --context casework --tenant test --idp-token-file ./idp-token.txt
+   ```
+
+   The registration becomes `active`. Prefer the file (or piping the token on stdin) to putting it on the
+   command line, where it lands in your shell history. The token is checked once and never stored; delete the
+   file afterwards. Note this is `--idp-token-file`, not `--token`: `--token` is your Vectros credential.
+   If the command is refused with a 400, its message names the check that failed; the most common are these.
+   *"does not carry the … claim"* means the Action is not deployed and in the post-login flow, its secret is
+   unset, or the token came from a login made before that: fix it and sign in again. *"does not match this
+   registration's verificationNonce"* means the secret holds a different value than `vectros issuers get`
+   shows. *"audience does not include"* usually means the ID token was sent instead of the access token.
+   A 404, a 409, a timeout or a server error is different: the CLI prints the command to run next
+   (`vectros issuers get`), because a timeout can still have completed. Read the registration back before
+   retrying; retrying a verify that did succeed answers *"not awaiting verification"*.
+4. Optionally remove the Action (take it out of the post-login flow and click **Apply**, then delete it); the
+   value is only checked once.
+
+The verification is checked against your tenant's own published OpenID Connect discovery document, so
+`auth0Domain` must be exactly the domain Auth0 reports as the issuer. The challenge expires seven days after
+registration. If it lapses while the issuer is still pending, `vectros blueprint apply` and `vectros issuers get`
+say so and name the two commands that replace it (`vectros issuers delete`, then re-run `blueprint apply`); nothing is
+deleted for you, and the new registration gets a new value, so update the Action's secret to match and deploy
+the Action again.
 
 ## 5a. Getting the invitee's email — handled automatically, no action needed
 
@@ -148,7 +218,7 @@ failure and nothing to find in the logs.
 `userinfoUri` pointing at your Auth0 domain's standard `/userinfo` endpoint — when the presented
 access token doesn't carry `email` directly (the normal case), the platform falls back to calling
 that endpoint and reading `email` from its response instead. This is set automatically by
-`vectros bootstrap` in step 5 above; there is nothing to configure here for a standard Auth0
+`vectros blueprint apply` in step 5 above; there is nothing to configure here for a standard Auth0
 tenant.
 
 **If you're adapting this flow for a different OIDC provider** whose access tokens likewise omit
@@ -210,8 +280,8 @@ need to request it from your Auth0 account team before it's available on your te
 ## Test vs. production
 
 If you created two APIs in step 2, repeat step 3 (authorization), **step 3a (consent skipping —
-easy to forget since it's a per-API toggle, not per-application)**, and step 5 (blueprint apply,
-with `--tenant live` and the `casework-prod` audience) for the production side once you're ready
+easy to forget since it's a per-API toggle, not per-application)**, and step 5 (`vectros blueprint apply`,
+with `--tenant live` and the `casework-prod` audience, then step 5-verify for the production issuer) for the production side once you're ready
 to deploy for real. Keeping the two fully separate — separate audiences, separate Vectros
 tenants, ideally a dedicated test user you never use for anything real — means you can safely
 automate testing against the test side without any risk to production data.

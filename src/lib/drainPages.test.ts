@@ -93,7 +93,7 @@ describe('drainPages', () => {
   });
 
   it('does NOT stop on an empty page that still carries a live cursor', async () => {
-    // The shape a case-handler's per-page `filterByDataScope` narrowing really
+    // The shape a case-handler's per-page data-scope narrowing really
     // produces: server-side filtering is applied to each page AFTER that
     // page's cursor is captured, so a page can come back empty with rows
     // still behind it. Stopping here is silent truncation.
