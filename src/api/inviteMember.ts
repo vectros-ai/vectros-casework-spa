@@ -82,9 +82,11 @@ export async function inviteMember(input: InviteMemberInput): Promise<InviteMemb
   //    at call time, not a build-time env var: self-adapts to wherever this
   //    deployment actually lives (localhost, a Vercel preview, production, a
   //    custom domain later) with nothing to keep in sync. Must be `https://`
-  //    in any real deployment (rejected for `http://`, except
-  //    for the operator's own out-of-band first-admin `sendEmail: false` call
-  //    documented in this app's README, which skips this validation).
+  //    with a real domain-name host (rejected for `http://` and for an IP
+  //    literal) — the platform validates this whenever `acceptUrl` is
+  //    supplied at all, including the operator's own out-of-band first-admin
+  //    `sendEmail: false` call documented in this app's README, so a plain
+  //    `http://localhost` origin now fails validation there too.
   const invite = await api.auth.createInvite({
     email: trimmedEmail,
     contextId: CASEWORK_CONTEXT_ID,

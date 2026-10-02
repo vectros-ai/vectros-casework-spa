@@ -56,7 +56,7 @@ the same tradeoff most e2e suites make elsewhere.
 
 ### Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22.22
 - **The app itself already set up** — its own `.env.local` (`VITE_AUTH0_DOMAIN` /
   `VITE_AUTH0_CLIENT_ID` / `VITE_AUTH0_AUDIENCE` / `VITE_VECTROS_EXCHANGE_URL` /
   `VITE_VECTROS_API_URL`), per the repo root `README.md`. This suite does NOT set those for you —

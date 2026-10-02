@@ -26,11 +26,11 @@ differently; this is the first one published.
 - A team roster with an invite flow
 - A self-service account page (password reset, two-factor management)
 - A chat-style "Ask" panel grounded on a case's own notes and documents (full access for
-  `hr-admin`; `case-handler`'s access is still blocked on a platform-side scope limitation, see
-  `CaseAskPanel.tsx`'s header comment)
-- Hybrid search across cases, case entries, and case documents (`hr-admin` only for now — see
-  `SearchPage.tsx`'s header comment for why `case-handler`'s access is still blocked on the same
-  platform-side limitation as Ask, above)
+  `hr-admin`; `case-handler` is not enabled: the app sends a single `scope` value, which cannot carry
+  both the org and client dimensions a `case-handler` grant needs, while the platform's `scopeFilters`
+  parameter carries several dimensions at once)
+- Hybrid search across cases, case entries, and case documents (`hr-admin` only; `case-handler` is
+  not enabled, for the same single-`scope` reason as Ask, above)
 - Every list paginated through to the end, not just the first page
 
 ## Why no backend?
@@ -140,8 +140,7 @@ platform enforces the isolation either way, not the agent.
 A Playwright smoke suite exercising this app end to end (sign-in, orgs, clients, cases, search,
 and the team/invite flow) ships alongside this app in an `e2e/` directory, pointed at your own
 test credentials instead of ours. Run it with `e2e/run.sh` against a local dev server or your own
-deployed instance. It isn't wired into CI as an automated regression gate yet; that's tracked
-separately.
+deployed instance. It is not wired into CI as an automated regression gate.
 
 ## Scripts
 

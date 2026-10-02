@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.1] - 2026-10-01
+
+### Changed
+
+- **Updates to `@vectros-ai/sdk` 0.46.0.** The README now states that Ask and Search are enabled for `hr-admin` only: the app sends a single `scope` value, which cannot carry the org and client dimensions a `case-handler` grant needs.
+
 ## [1.3.0] - 2026-09-22
 
 ### Security
