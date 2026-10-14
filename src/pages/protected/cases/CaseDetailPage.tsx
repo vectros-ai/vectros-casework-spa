@@ -106,6 +106,7 @@ import { dataQueryKeys } from '../../../lib/dataQueryKeys';
 import { drainPages } from '../../../lib/drainPages';
 import { useTouchedFieldErrors } from '../../../lib/useTouchedFieldErrors';
 import { STATUS_COLORS } from '../../../lib/caseStatusColors';
+import { ASK_ACTION } from '../../../lib/scopeActions';
 import { CaseDocumentsSection } from './CaseDocumentsSection';
 import { CaseAskPanel } from './CaseAskPanel';
 
@@ -119,7 +120,7 @@ export function CaseDetailPage(): React.JSX.Element {
   const canChangeStatus = canPerformAction('records:u:case');
   const canAddEntry = canPerformAction('records:c:case_note');
   const canUploadDocument = canPerformAction('documents:c');
-  const canAsk = canPerformAction('inference:r');
+  const canAsk = canPerformAction('inference:r') && canPerformAction(ASK_ACTION);
 
   const [entryPayload, setEntryPayload] = useState<Record<string, unknown>>({});
   const [askOpen, setAskOpen] = useState(false);

@@ -115,5 +115,6 @@ file's own top-of-file comment first:
 - `src/lib/drainPages.ts` — the pagination-draining helper every list query in this app uses;
   read it before adding a new paginated list.
 - `src/pages/protected/cases/CaseAskPanel.tsx` — the RAG "Ask" panel's scope requirements, and
-  the one platform-side limitation ([`README.md`](../README.md)'s "What's built" list references
-  it too) that still blocks `case-handler`'s own access to it.
+  why `case-handler` is not offered it ([`README.md`](../README.md)'s "What's built" list references
+  it too): this app sends one `scope` value, which cannot carry the org and client dimensions a
+  `case-handler` grant needs.

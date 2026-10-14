@@ -4,13 +4,13 @@
 //
 // **hr-admin only, deliberately, for now.** `case-handler` holds `search:r` in
 // its own blueprint clause too, but that clause's `dataScope` needs BOTH
-// `scope:org` AND `scope:client`, and the search API's caller-filter is a
-// single `namespace:value` string that can't carry both — the same
-// platform-side limitation `CaseAskPanel`'s header comment documents for Ask.
+// `scope:org` AND `scope:client`, and this app sends one `namespace:value`
+// `scope` value, which can't carry both (the same reason `CaseAskPanel`'s
+// header comment documents for Ask).
 // A `case-handler` reaching this screen would only ever see a 403, so the nav
 // item/route is gated on `SEARCH_ACTION` (`scopeActions.ts`'s own comment has
 // the full reasoning for why that's `TEAM_ACTION`, not `search:r` itself).
-// Revisit once that platform-side limitation is fixed.
+// Revisit once the app sends both dimensions.
 //
 // **Org-scoped, one org at a time.** `hr-admin`'s `search:r` `dataScope` is
 // single-dimension (`scope:org` only) — but the search API's caller-filter

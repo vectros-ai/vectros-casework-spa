@@ -24,7 +24,7 @@ differently; this is the first one published.
 - Sign-in via Auth0 (Universal Login, token exchange, session handling)
 - Org, client, and case management
 - A team roster with an invite flow
-- A self-service account page (password reset, two-factor management)
+- A self-service account page (password reset, and two-factor setup through Auth0's hosted screens)
 - A chat-style "Ask" panel grounded on a case's own notes and documents (full access for
   `hr-admin`; `case-handler` is not enabled: the app sends a single `scope` value, which cannot carry
   both the org and client dimensions a `case-handler` grant needs, while the platform's `scopeFilters`
@@ -97,13 +97,15 @@ the very first one, is invited. That's deliberate: it's built for a single compa
 case-management team, not a public sign-up funnel, so there's no "create an account" link anywhere
 in the UI. Send yourself an `hr-admin` invite with the CLI, no root key needed. **`--accept-url`
 is required** — the platform sends the invite email itself by default, and refuses the call
-without somewhere to point it — so this step needs step 4's real, publicly-reachable deployed URL:
+without somewhere to point it — so this step needs an `https` URL with a domain-name host: your deployed URL from step 4, or `https://localhost:3003` with the local certificate from `docs/AUTH0-SETUP.md` step 4a. Use the same `--tenant` as step 3:
 
 ```bash
 vectros login   # if you aren't already
-vectros identity invite --context casework --role hr-admin --email admin@example.com \
+vectros identity invite --context casework --role hr-admin --email admin@example.com --tenant test \
   --accept-url "https://<your-deployed-app-url>/accept"
 ```
+
+`--tenant` on `identity invite` needs `@vectros-ai/cli` 0.25.0 or later.
 
 Accept the invite email, sign in, and you'll land on this app with full admin access — from there,
 use the Team screen to invite everyone else the normal way. This one CLI command is the only step
@@ -112,7 +114,7 @@ that happens outside this app's own UI.
 **Working locally instead of deploying first?** Once `.env.local` is filled in (step 1), `npm run
 dev` gets you developing and signing in against a local dev server for steps 2-3 without ever
 reaching step 4 — come back to deploying when you're ready to invite a real first admin (step 5
-needs a real deployed URL either way).
+needs an `https` URL with a domain-name host either way).
 
 ### Forking
 

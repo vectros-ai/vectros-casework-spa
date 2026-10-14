@@ -454,13 +454,13 @@ describe('CaseDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Upload document' })).toBeDisabled();
   });
 
-  it('gates the "Ask about this case" button on inference:r', async () => {
+  it('shows the "Ask about this case" button to the hr-admin shape and opens the panel', async () => {
     const user = userEvent.setup();
     const askGate: ScopeGateValue = {
       loading: false,
-      allowedActions: ['inference:r'],
+      allowedActions: ['inference:r', 'profiles:r'],
       identity: {},
-      can: (a) => a === 'inference:r',
+      can: (a) => a === 'inference:r' || a === 'profiles:r',
     };
     mockedUseScopeGate.mockReturnValue(askGate);
     const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);
@@ -477,6 +477,38 @@ describe('CaseDetailPage', () => {
     await user.click(askButton);
 
     expect(await screen.findByRole('heading', { name: 'Ask about this case', level: 2 })).toBeInTheDocument();
+  });
+
+  it('does not show the "Ask about this case" button to the case-handler shape (inference:r, no profiles:r)', async () => {
+    // Both roles hold inference:r. A case-handler's Ask request is refused, because its grant needs the org
+    // and client scopes together and the app sends one scope value, so the button must not be offered.
+    mockedUseScopeGate.mockReturnValue({
+      loading: false,
+      allowedActions: ['inference:r'],
+      identity: {},
+      can: (a) => a === 'inference:r',
+    });
+    const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);
+    const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
+    renderPage({ records: { getRecord, lookupRecords }, schemas: { listSchemas: vi.fn() } });
+
+    await screen.findByRole('heading', { name: 'grievance' });
+    expect(screen.queryByRole('button', { name: 'Ask about this case' })).not.toBeInTheDocument();
+  });
+
+  it('does not show the "Ask about this case" button for a caller with profiles:r but without inference:r', async () => {
+    mockedUseScopeGate.mockReturnValue({
+      loading: false,
+      allowedActions: ['profiles:r'],
+      identity: {},
+      can: (a) => a === 'profiles:r',
+    });
+    const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);
+    const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
+    renderPage({ records: { getRecord, lookupRecords }, schemas: { listSchemas: vi.fn() } });
+
+    await screen.findByRole('heading', { name: 'grievance' });
+    expect(screen.queryByRole('button', { name: 'Ask about this case' })).not.toBeInTheDocument();
   });
 
   it('does not show the "Ask about this case" button for a caller without inference:r', async () => {

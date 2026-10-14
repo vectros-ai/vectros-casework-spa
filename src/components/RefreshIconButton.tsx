@@ -1,11 +1,10 @@
 // ---------------------------------------------------------------------------
 // RefreshIconButton — a manual refresh affordance for a list page.
 //
-// Rough-edges item 1 (this app's punch list): before this, no list page had
-// any way to re-pull the server's current state short of a full page reload
-// — which also made a real cache-invalidation bug (a case status change not
-// showing back up on the Cases list) hard to even DIAGNOSE as a cache issue
-// rather than an app bug. One shared button, wired to the page's own
+// Without one, a list page cannot re-pull the server's current state short of a
+// full page reload, which also makes a cache-invalidation bug (a case status
+// change not showing back up on the Cases list) hard to even DIAGNOSE as a cache
+// issue rather than an app bug. One shared button, wired to the page's own
 // `refetch`, keeps every list page consistent rather than reinventing this
 // per page.
 // ---------------------------------------------------------------------------

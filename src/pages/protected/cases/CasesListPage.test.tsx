@@ -143,7 +143,7 @@ describe('CasesListPage', () => {
   });
 
   it('refetches the case list when the refresh button is clicked', async () => {
-    // Regression guard for item 1 of the rough-edges list: a status change made on
+    // Regression guard: a status change made on
     // CaseDetailPage wasn't reflected back here because nothing ever invalidated this
     // page's own query keys. This pins the fix's OTHER half — the manual refresh
     // affordance itself actually re-pulls the case list.

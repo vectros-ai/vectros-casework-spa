@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
-// useTouchedFieldErrors tests — the touched-gating logic for UX-2 (required-
-// field errors rendering before the form is touched).
+// useTouchedFieldErrors tests — the touched-gating logic (required-field
+// errors rendering before the form is touched).
 // ---------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';

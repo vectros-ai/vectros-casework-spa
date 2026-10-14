@@ -29,11 +29,19 @@ export const CLIENTS_ACTION = 'entities:c:client';
 /** The scope-action gating the Search nav item and route. Deliberately NOT `search:r` itself —
  *  both `hr-admin` and `case-handler` hold that in `casework.blueprint.yaml`'s `allowedActions`,
  *  so it can't distinguish them. The actual blocker is `case-handler`'s `search:r` `dataScope`
- *  needing BOTH `scope:org` AND `scope:client`, which the search API's single-string caller-filter
- *  can't express (the same platform-side limitation `CaseAskPanel`'s header comment documents for
- *  Ask) — so a `case-handler` reaching this screen would only ever see a 403, not real results.
+ *  needing BOTH `scope:org` AND `scope:client`, which the single `scope` value this app sends can't
+ *  carry (`CaseAskPanel`'s header comment documents the same for Ask) — so a `case-handler` reaching
+ *  this screen would only ever see a 403, not real results.
  *  Reusing `TEAM_ACTION` here is the same hr-admin-exclusive proxy that constant's own comment
  *  already relies on (only `hr-admin` holds any `profiles:*` grant) — not because Search relates
- *  to Team. Swap to a real `search:r`-based gate once that platform-side limitation is fixed and
+ *  to Team. Swap to a real `search:r`-based gate once the app sends both dimensions and
  *  `case-handler`'s search calls actually succeed. */
 export const SEARCH_ACTION = TEAM_ACTION;
+/** The scope-action that, together with `inference:r`, shows the "Ask about this case" button.
+ *  `inference:r` alone cannot distinguish the roles: both `hr-admin` and `case-handler` hold it,
+ *  yet a `case-handler`'s Ask request is refused for the same reason its Search is, which
+ *  `SEARCH_ACTION` above explains. Ask is
+ *  therefore enabled for `hr-admin` only, as the README says, and this reuses the same
+ *  hr-admin-exclusive proxy as {@link SEARCH_ACTION}. Swap to an `inference:r`-only gate once the
+ *  app sends the org and client dimensions together. */
+export const ASK_ACTION = TEAM_ACTION;

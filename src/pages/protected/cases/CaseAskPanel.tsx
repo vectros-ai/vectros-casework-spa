@@ -32,10 +32,11 @@
 // dimension fails the gate closed. This panel now sends `orgScope` — fixes
 // hr-admin's Ask completely. It does NOT fix case-handler: `RagSearch.scope`
 // is a single `namespace:value` string, and case-handler's access clause
-// needs BOTH `org` and `client` at once, which one field can't carry —
-// blocked on a platform-side limitation regardless of anything this app can
-// do. Case-handler's Ask request still 403s until `RagSearch.scope` (or its
-// replacement) can express more than one scope dimension at a time.
+// needs BOTH `org` and `client` at once, which one field can't carry. The
+// platform's `scopeFilters` parameter does carry several dimensions, but this
+// app does not send it, so a case-handler's Ask request would 403 and the
+// case-detail page shows the Ask button to `hr-admin` only (the README says
+// the same).
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from 'react';
@@ -75,8 +76,7 @@ interface CaseAskPanelProps {
   /** `"org:<id>"` — sent as `RagSearch.scope` so the request satisfies
    *  hr-admin's authorization clause (see the header comment above). NOT
    *  sufficient for case-handler, whose clause additionally needs
-   *  `scope:client`; that half stays blocked on a platform-side limitation
-   *  (see the header comment above). */
+   *  `scope:client`, which is why Ask is offered to `hr-admin` only. */
   readonly orgScope: string;
   readonly onClose: () => void;
 }

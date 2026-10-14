@@ -5,8 +5,7 @@
 // `validateFields(schemaFields, payload)` runs eagerly against whatever
 // `payload` currently is — on a blank "create" form, that's `{}`, so every
 // `required` field is a validation error from the very first render, before
-// the user has typed or blurred anything (pre-release UX audit, finding
-// UX-2). RecordFormFields itself is presentational and has no concept of
+// the user has typed or blurred anything. RecordFormFields itself is presentational and has no concept of
 // "touched" — the fix belongs at each call site, which already owns the
 // payload state this hook needs to key off of.
 //

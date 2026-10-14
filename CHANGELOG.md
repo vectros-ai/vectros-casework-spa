@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.2] - 2026-10-12
+
+### Changed
+
+- **Built against SDK 0.47.0.** The case "Ask" panel has always used the default model reported by `GET /v1/models`, so it uses Claude Haiku 5.5 once the platform reports it as the default. See the
+  [SDK changelog](https://github.com/vectros-ai/vectros-api-spec/blob/main/CHANGELOG.md) for the full release.
+- **Source comments state their rules themselves.** Comments that pointed at internal documents now say what
+  the rule is, so the published source reads on its own. No behavior changes.
+
+
+### Fixed
+
+- **The case "Ask" button is shown to `hr-admin` only, as the README says.** A `case-handler` does not see it: its grant
+  needs the org and client scopes together and the app sends one `scope` value, so a question would be refused with a
+  `403`. Search is gated the same way.
+
+### Security
+
+- **Build and test dependencies updated to patched releases.** `brace-expansion`, `js-yaml`, `undici` and `vitest`
+  (with its coverage plugin) now resolve to versions that fix their published advisories. These packages are used
+  while building and testing the app and are not part of the built app, so the app's behavior is unchanged. If you
+  forked the app, the `overrides` block in `package.json` keeps the patched floors for `js-yaml` and `undici` in
+  place when you regenerate your lockfile; `brace-expansion` is fixed in the committed lockfile, and `vitest` with
+  its coverage plugin by their exact `devDependencies` pins.
+
 ## [1.3.1] - 2026-10-01
 
 ### Changed
