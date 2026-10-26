@@ -2,7 +2,7 @@
 // HomePage — the signed-in landing page.
 //
 // This used to be a placeholder that only proved the sign-in + token-exchange
-// chain worked (mint a Vectros partner-API bearer, report success/failure) —
+// chain worked (mint a Vectros API bearer, report success/failure) —
 // useful while there was nothing else to land on, but not a real landing
 // screen once a caller can actually reach Cases/Orgs. Now it's a role-aware
 // dashboard: an open-cases count linking to Cases, and the caller's own

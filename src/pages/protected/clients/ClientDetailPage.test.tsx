@@ -110,12 +110,12 @@ describe('ClientDetailPage', () => {
   });
 
   it('does not show a required field as an error on load, until it is touched -- even for an existing record missing it', async () => {
-    // Regression guard: useTouchedFieldErrors was wired into the CREATE dialogs (a blank
-    // payload) but originally missed on this EDIT page, latent as long as every saved record
-    // already satisfied its schema. The moment client_profile gains a new required field an
-    // existing record doesn't have (simulated here), this page would show that field red the
-    // instant it loads, before the caller touched anything -- the exact same bug the create
-    // dialogs already fixed, just triggered by schema evolution instead of a blank form.
+    // Regression guard: useTouchedFieldErrors covers the CREATE dialogs (a blank
+    // payload) and equally this EDIT page, where the problem is latent as long as every saved record
+    // already satisfies its schema. The moment client_profile gains a new required field an
+    // existing record doesn't have (simulated here), an unguarded page would show that field red the
+    // instant it loads, before the caller touched anything -- the same problem as a blank create
+    // form, just triggered by schema evolution instead.
     mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
     const getEntity = vi.fn().mockResolvedValue(CLIENT); // payload: {} -- missing any new required field
     const listSchemas = vi.fn().mockResolvedValue(
@@ -142,10 +142,10 @@ describe('ClientDetailPage', () => {
   });
 
   it('shows a breadcrumb linking back to the client\'s own org', async () => {
-    // Regression guard: this page already computed `orgId`
-    // from the client's own scopes but never displayed or linked it -- a caller who reached a
-    // client directly (not via CaseDetailPage's own org->client breadcrumb) had no way to tell or
-    // navigate to which org it belonged to.
+    // Regression guard: the page must display and link the `orgId` it computes
+    // from the client's own scopes -- otherwise a caller who reached a
+    // client directly (not via CaseDetailPage's own org->client breadcrumb) has no way to tell or
+    // navigate to which org it belongs to.
     mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
     const getEntity = vi.fn().mockImplementation(({ namespace }: { namespace: string }) =>
       namespace === 'org'
@@ -214,11 +214,10 @@ describe('ClientDetailPage', () => {
   });
 
   it('invalidates the list caches (broad org list + founder-discovery), not just the entity cache, on save', async () => {
-    // Regression guard (review finding, 2026-08-28): this used to invalidate only
-    // `dataQueryKeys.client(id)` — `ClientsListPage`/`CreateCaseDialog`'s existing-client picker
-    // would show the OLD name for up to `staleTime` after navigating back. `OrgDetailPage.tsx`'s
-    // own save/delete handlers invalidate both the entity AND the founder-list cache; this page's
-    // own commit claimed to follow that pattern exactly but didn't, until now.
+    // Regression guard: invalidating only `dataQueryKeys.client(id)` would leave
+    // `ClientsListPage`/`CreateCaseDialog`'s existing-client picker showing the OLD name for up to
+    // `staleTime` after navigating back. `OrgDetailPage.tsx`'s own save/delete handlers invalidate
+    // both the entity AND the founder-list cache; this page does the same.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
     const getEntity = vi.fn().mockResolvedValue(CLIENT);
@@ -272,7 +271,7 @@ describe('ClientDetailPage', () => {
 
     await screen.findByRole('heading', { name: 'Jane Doe' });
     await user.click(screen.getByRole('button', { name: 'Archive client' }));
-    // Regression guard: archive now confirms first, via the shared ConfirmDialog, rather than
+    // Regression guard: archive confirms first, via the shared ConfirmDialog, rather than
     // firing on the first click.
     await user.click(await screen.findByRole('button', { name: 'Yes, archive' }));
 
@@ -285,8 +284,8 @@ describe('ClientDetailPage', () => {
       }),
     );
     expect(deleteEntity).not.toHaveBeenCalled();
-    // Regression guard: archive had an error path wired up but no matching success
-    // confirmation, unlike this same page's Save action.
+    // Regression guard: archive needs a success confirmation matching its error path,
+    // as this same page's Save action has.
     expect(await screen.findByText('Archived.')).toBeInTheDocument();
   });
 
@@ -321,8 +320,8 @@ describe('ClientDetailPage', () => {
 
   it('shows a failed archive\'s error INSIDE the still-open confirm dialog, not occluded behind it', async () => {
     // Regression guard: ConfirmDialog has an error slot specifically so a failure renders
-    // inside the still-open modal instead of being occluded behind it -- this page previously
-    // never passed one, so a failed archive left the mutation's error alert in the page body,
+    // inside the still-open modal instead of being occluded behind it -- without passing one, a failed archive
+    // leaves the mutation's error alert in the page body,
     // invisible behind the open dialog backdrop, with nothing telling the caller it failed.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
@@ -520,11 +519,10 @@ describe('ClientDetailPage', () => {
     });
 
     it('assigns a case handler at the chosen level and refreshes the members list', async () => {
-      // Regression guard, tightened after a review finding: the original version of this test
-      // asserted `createRecord`'s call shape but never actually verified a "refresh" happened — it
-      // would have passed even if `onSuccess`'s invalidation were silently dropped. `listRecords`
-      // now returns the NEW member row only after the assign succeeds, so the assertion below can
-      // only pass if the invalidation actually re-fires the query and the new row renders.
+      // Regression guard: asserting `createRecord`'s call shape alone never verifies that a
+      // "refresh" happened — it would pass even if `onSuccess`'s invalidation were silently dropped.
+      // So `listRecords` returns the NEW member row only after the assign succeeds, and the assertion
+      // below can only pass if the invalidation actually re-fires the query and the new row renders.
       const user = userEvent.setup();
       mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
       const getEntity = vi.fn().mockResolvedValue(CLIENT);
@@ -591,10 +589,9 @@ describe('ClientDetailPage', () => {
     });
 
     it('excludes a case handler who already has a membership row on this client from the assign picker', async () => {
-      // Regression guard (review finding, 2026-08-28): nothing previously stopped an admin from
-      // creating a SECOND `client_membership` row for the same person — it would render as two
+      // Regression guard: a SECOND `client_membership` row for the same person would render as two
       // indistinguishable rows in the Members table (keyed on the record's own `id`, not
-      // `targetUserId`).
+      // `targetUserId`), so the picker must not offer someone who already has one.
       const user = userEvent.setup();
       mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
       const getEntity = vi.fn().mockResolvedValue(CLIENT);

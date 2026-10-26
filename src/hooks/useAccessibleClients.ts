@@ -2,14 +2,14 @@
 // useAccessibleClients — every client the signed-in caller can reach WITHIN
 // one org: three discovery sources, unioned, because `hr-admin` and
 // `case-handler` hold genuinely different-SHAPED grants on the `client`
-// namespace (`casework.blueprint.yaml`, item C's data-isolation pass) —
+// namespace (`casework.blueprint.yaml`) —
 // unlike `useAccessibleOrgs`, where both roles' org reach is founder-or-
 // member alike, so one hook shape covers both there. Here it doesn't:
 //
 // 1. BROAD, org-wide (`entities:cr:client`, `hr-admin` only in practice) —
 //    every client scoped to this org, regardless of relationship. Fails
 //    closed (403) for `case-handler`, who holds no org-scoped client read at
-//    all as of this pass — expected, not an error state for THIS hook: a
+//    all — expected, not an error state for THIS hook: a
 //    source that can't authorize for this caller just contributes nothing to
 //    the union, the same way `useAccessibleOrgs`'s founder query contributes
 //    nothing for a caller who's never founded an org.
@@ -17,10 +17,9 @@
 //    clients this caller personally created.
 // 3. MEMBER (`client_membership` self-read, both roles) — clients someone
 //    else granted this caller access to. Currently the ONLY way a
-//    case-handler reaches a client they didn't found — see this pass's own
+//    case-handler reaches a client they didn't found — see the
 //    "assign a case-handler to a client" UI (`ClientDetailPage`'s Members
-//    section), which is what makes this source non-vacuous for the first
-//    time.
+//    section), which is what makes this source non-vacuous.
 //
 // Overall `isError` is true only if EVERY source failed — one working
 // source is a real, honest result; erroring only reflects a caller for whom
@@ -168,9 +167,7 @@ export function useAccessibleClients(
   // an error — see this file's own header comment. Deliberately NOT also checking
   // `memberClientQueries` here: when `membershipQuery` itself errors, its `.data` is `undefined`,
   // which forces `missingClientIds` to `[]` — so `memberClientQueries` is always empty in that
-  // branch and has nothing left to check (review finding, 2026-08-28: an earlier draft of this line
-  // DID check it, and the extra clause was dead code that read as a real check but never changed
-  // the result — removed rather than left misleading).
+  // branch and has nothing left to check.
   const allErrored = broadQuery.isError && founderQuery.isError && membershipQuery.isError;
 
   const seenIds = new Set<string>();

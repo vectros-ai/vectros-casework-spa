@@ -198,8 +198,8 @@ describe('AddCaseDocumentDialog', () => {
   });
 
   it('cleans up the document when the presign comes back without a URL', async () => {
-    // The branch that used to leak: this check sat OUTSIDE the try, so the
-    // document was created and then abandoned with no compensation at all.
+    // A document row exists by the time the presign comes back without a URL, so
+    // it must be deleted rather than abandoned.
     const listSchemas = vi.fn().mockResolvedValue(pageOf([SCHEMA]));
     const uploadDocument = vi.fn().mockResolvedValue({ id: 'doc_orphan', created: true });
     const deleteDocument = vi.fn().mockResolvedValue(undefined);

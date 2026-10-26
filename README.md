@@ -39,7 +39,7 @@ Vectros gives this app a full backend already: a secure, scalable, structured da
 records and documents) with full-text search, semantic search, and flexible filtering unified into
 one hybrid index, per-compartment isolation enforced structurally rather than by a WHERE clause you
 have to remember every time, grounded AI answers with citations over that same data, and a
-tamper-evident audit trail. None of that is application code here: it's driven entirely by the
+retained version history of who changed what and when. None of that is application code here: it's driven entirely by the
 declarative access policy in [`blueprint/casework.blueprint.yaml`](blueprint/casework.blueprint.yaml).
 There's no API layer to write, deploy, or secure, because there's no API layer: this app talks to
 Vectros's own API directly, and Vectros's own authorization model does the rest.

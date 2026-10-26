@@ -5,13 +5,11 @@
 // dialog for the two mainstream cases (new client / existing client, both
 // succeeding); it never isolates createCase.ts's OWN defensive throws.
 //
-// Two cells here used to assert the opposite of what the code now does: they
-// pinned "a folder-create failure leaves the client behind" and "a case-create
-// failure leaves the FOLDER behind" as documented no-rollback behaviour. The
-// second is the defect this change removes, so it is gone rather than inverted
-// — there is no longer a separate folder step to fail on its own. The first
-// survives in spirit: the client entity is still outside the transaction, and
-// that residual is asserted below deliberately rather than left implied.
+// The client entity is created outside the script transaction, so a failure of
+// the composed execution leaves it behind; that residual is asserted below
+// deliberately rather than left implied. The folder and the case record are
+// written in the one execution, so there is no separate folder step to fail
+// on its own.
 // ---------------------------------------------------------------------------
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -269,12 +267,11 @@ describe('createCase', () => {
   });
 
   it('ATOMICITY: a failed execution commits nothing — no folder and no case are left behind', async () => {
-    // The assertion that justifies the whole change, and the one a happy-path
-    // test cannot see. The platform commits before it responds, so a rejected
-    // execution means nothing was written; what this pins on the client side is
-    // that there is no longer a SEPARATE folder write that could have landed
-    // first. Before this change the folder call had already succeeded by the
-    // time the record call failed, and nothing undid it.
+    // The assertion a happy-path test cannot see. The platform commits before it
+    // responds, so a rejected execution means nothing was written; what this pins
+    // on the client side is that there is no SEPARATE folder write that could
+    // land first (a folder that succeeded before the record call failed would
+    // be left behind, with nothing to undo it).
     const createFolder = vi.fn();
     const createRecord = vi.fn();
     const executeScript = vi.fn().mockRejectedValue(new Error('WRITE_BUFFER_CAP_EXCEEDED'));

@@ -2,13 +2,13 @@
 // createCase — TWO calls: select or create the case's client entity, then run
 // the `create-case` script, which creates the case's folder and the case record
 // carrying that folder's id as ONE transaction. They commit together or not at
-// all, so a failure part-way can no longer leave an orphan folder with no case.
+// all, so a failure part-way cannot leave an orphan folder with no case.
 //
 // The client entity stays a separate call in front, and is NOT covered by that
 // transaction: a script's host object reaches records, documents and folders,
 // not identity entities. So a failure AFTER the entity is created still leaves
-// a client with no case — a real residual, much smaller than the one this
-// closed, and not fixable until a script can reach entities.
+// a client with no case — a known residual that cannot be closed until a
+// script can reach entities.
 //
 // Executing the script needs `scripts:x:create-case` — qualified to this one
 // name, never a bare `scripts:x`, which would mean "may run every script in

@@ -6,13 +6,13 @@
 // `payload` currently is — on a blank "create" form, that's `{}`, so every
 // `required` field is a validation error from the very first render, before
 // the user has typed or blurred anything. RecordFormFields itself is presentational and has no concept of
-// "touched" — the fix belongs at each call site, which already owns the
+// "touched" — the gating belongs at each call site, which already owns the
 // payload state this hook needs to key off of.
 //
 // The DISPLAYED errors are touched-gated; whether the form is actually valid
 // is not — a caller's own `canSubmit` check should keep using the full,
 // unfiltered `fieldErrors` (validateFields's own return value), same as
-// before this hook existed. A create button correctly staying disabled on a
+// without this hook. A create button correctly staying disabled on a
 // still-blank required field is normal, expected behavior (the same
 // disabled+tooltip pattern this app's other primary actions already use) —
 // what's NOT normal is that field turning red before anyone touched it.

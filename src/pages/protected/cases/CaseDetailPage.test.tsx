@@ -125,9 +125,8 @@ describe('CaseDetailPage', () => {
   });
 
   it('shows a breadcrumb resolving the case\'s org and client scope to display names, org linked to OrgDetailPage', async () => {
-    // A case's org/client are ownership scope dims, not payload fields — before this, nothing
-    // resolved them to a name at all, so the page had no visible sense of which org/client a case
-    // belongs to.
+    // A case's org/client are ownership scope dims, not payload fields, so they must be
+    // resolved to a name for the page to show which org/client a case belongs to.
     mockedUseScopeGate.mockReturnValue(READ_ONLY_GATE);
     const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);
     const lookupRecords = vi.fn().mockResolvedValue(pageOf([]));
@@ -151,15 +150,14 @@ describe('CaseDetailPage', () => {
     expect(getEntity).toHaveBeenCalledWith({ namespace: 'client', id: 'client_1', contextId: 'casework' });
   });
 
-  it("queries entries by this exact case's own id, not by a client-shared scope — the fix for a client with more than one case", async () => {
+  it("queries entries by this exact case's own id, not by a client-shared scope — so a client with more than one case is handled", async () => {
     // A client can have MORE than one case (createCase supports picking an
     // EXISTING client for a NEW case), so two different cases share the exact
-    // same client:<id> scope. Before this fix, this page asked for every
-    // case_note the caller could reach and filtered client-side by that
-    // shared scope — indistinguishable between a client's two cases. The fix
-    // is precision AT THE QUERY, not a client-side filter: `caseId` names
-    // the exact case, so there's no client-side narrowing left to test here —
-    // asserting the query's own args IS the regression guard.
+    // same client:<id> scope. Asking for every case_note the caller can reach
+    // and filtering client-side by that shared scope cannot tell a client's two
+    // cases apart, so precision has to be AT THE QUERY: `caseId` names the exact
+    // case, so there's no client-side narrowing left to test here — asserting
+    // the query's own args IS the regression guard.
     mockedUseScopeGate.mockReturnValue(READ_ONLY_GATE);
     const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);
     const lookupRecords = vi.fn().mockResolvedValue(
@@ -232,10 +230,10 @@ describe('CaseDetailPage', () => {
   });
 
   it('shows an explicit unavailable message, not a permanent spinner, for a case that predates externalId', async () => {
-    // Regression guard, found live (2026-08-28): `notesQuery` is `enabled: typeof caseExternalId
+    // Regression guard: `notesQuery` is `enabled: typeof caseExternalId
     // === 'string'` — a DISABLED react-query reports `isPending: true` forever (never
     // distinguishes "actively fetching" from "never enabled"), so checking `isPending` alone
-    // spun forever for a real pre-existing case with no `externalId`, no request ever made, no
+    // spins forever for a pre-existing case with no `externalId`, no request ever made, no
     // error to show either. `lookupRecords` must never be called here — there is no valid case
     // id to look up by.
     mockedUseScopeGate.mockReturnValue(READ_ONLY_GATE);
@@ -293,15 +291,15 @@ describe('CaseDetailPage', () => {
         },
       }),
     );
-    // Regression guard: the status control had an error path wired up but no matching success
-    // confirmation, unlike this same page's Save action elsewhere.
+    // Regression guard: the status control needs a success confirmation matching its error path,
+    // as this same page's Save action has.
     expect(await screen.findByText('Status updated.')).toBeInTheDocument();
   });
 
   it('invalidates the Cases list cache (not just the single-case query) when the status changes', async () => {
     // Regression guard: the list's own query key (['cases', statusFilter]) is a SEPARATE cache
     // entry from this page's single-case query (['cases', 'record', id]) — invalidating only the
-    // latter left a status change made here invisible back on CasesListPage.
+    // latter would leave a status change made here invisible back on CasesListPage.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
     const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);
@@ -324,12 +322,12 @@ describe('CaseDetailPage', () => {
   });
 
   it('re-fetches the case after a failed status update, so the next attempt is not stuck on a stale version', async () => {
-    // Regression guard for a real bug found live (smoke suite, 2026-08-28): the platform's own
+    // Regression guard: the platform's own
     // optimistic-concurrency check correctly 409s a stale write -- the everyday case of two people
     // having the same case open and one already having changed its status -- but without a refetch here, the
     // record in cache never updates, so clicking the dropdown again (the obvious next move, and
     // what the error text itself invites) resends the SAME stale version and fails identically
-    // forever. A page reload was the only way out before this fix.
+    // forever. A page reload would be the only way out.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
     const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);
@@ -385,8 +383,8 @@ describe('CaseDetailPage', () => {
 
   it('does not show the entry composer\'s required fields as errors until they are touched', async () => {
     // Regression guard: validateFields() runs eagerly
-    // against the blank entryPayload every fresh page load starts with, so both NOTE_SCHEMA
-    // required fields (noteType, body) used to render red the instant the case page loaded --
+    // against the blank entryPayload every fresh page load starts with, so, unguarded, both NOTE_SCHEMA
+    // required fields (noteType, body) would render red the instant the case page loaded --
     // before the caller had touched the composer at all.
     mockedUseScopeGate.mockReturnValue(FULL_ACCESS_GATE);
     const getRecord = vi.fn().mockResolvedValue(CASE_RECORD);

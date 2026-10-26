@@ -55,9 +55,9 @@ describe('useAccessibleOrgs', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.orgs).toEqual([{ id: 'org_1', name: 'Acme' }]);
-    // Regression guard (live-staging finding, 2026-08-28): the live API rejects a lookup with no
-    // value/from+to/prefix mode set — an omitted `values` isn't "match every org_membership row",
-    // it's a 400. Pin the exact self-lookup shape so this can't silently regress again.
+    // Regression guard: the API rejects a lookup with no value/from+to/prefix mode set — an
+    // omitted `values` isn't "match every org_membership row", it's a 400. Pin the exact
+    // self-lookup shape so this can't silently regress.
     expect(lookupRecords).toHaveBeenCalledWith({
       type: 'org_membership',
       field: 'targetUserId',
@@ -89,8 +89,8 @@ describe('useAccessibleOrgs', () => {
   });
 
   it('stays isPending (never flips isSuccess) while a membership-discovered org\'s entity fetch is still in flight', async () => {
-    // Regression guard: isPending/isSuccess used to only look at the founder + membership-LOOKUP queries,
-    // never the per-org getEntity fan-out — so a caller with one founded org and one member-only
+    // Regression guard: isPending/isSuccess must also cover the per-org getEntity fan-out, not only
+    // the founder + membership-LOOKUP queries — otherwise a caller with one founded org and one member-only
     // org would see isSuccess flip true, and `orgs` read as final (missing the member org), for the
     // whole window before that org's entity fetch resolved. A caller of this hook (CreateCaseDialog,
     // TeamPage's InviteDialog) would silently auto-pin the wrong (founder-only) org during that

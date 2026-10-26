@@ -107,16 +107,12 @@ function InviteDialog({ open, onClose, onInvited }: InviteDialogProps): React.JS
   const [role, setRole] = useState<InviteRole>('case-handler');
   const [orgId, setOrgId] = useState('');
 
-  // Founder orgs UNION member-only orgs (`useAccessibleOrgs`).
-  // CORRECTED (this pass): this used to be the FOUNDER set alone
-  // (`orgsFounded()`), on the premise that the org+membership `entities:r:org`
-  // clause is for "I already know the org id" reads, not discovery — true for
-  // the ORG entity read itself, but that premise missed that `hr-admin` also
-  // holds a self-only `records:r:org_membership` read (added the same session
-  // this comment used to predate) specifically FOR discovery, mirroring
-  // case-handler's own. An hr-admin invited into (not founding) an org now
-  // shows up here too — see `useAccessibleOrgs`'s own header comment for the
-  // full mechanism.
+  // Founder orgs UNION member-only orgs (`useAccessibleOrgs`), not the FOUNDER set alone
+  // (`orgsFounded()`): the org+membership `entities:r:org` clause is for "I already know the org
+  // id" reads, not discovery, but `hr-admin` also holds a self-only `records:r:org_membership`
+  // read specifically FOR discovery, mirroring case-handler's own. An hr-admin invited into
+  // (not founding) an org therefore shows up here too — see `useAccessibleOrgs`'s own header
+  // comment for the full mechanism.
   const orgsQuery = useAccessibleOrgs(hasUserId ? myUserId : undefined, open);
   const orgs: ReadonlyArray<EntityResponse> = orgsQuery.orgs;
   // No EDITABLE choice to offer when there's exactly one org — OrgPickerField still shows a
@@ -152,9 +148,9 @@ function InviteDialog({ open, onClose, onInvited }: InviteDialogProps): React.JS
     },
     // inviteMember.ts's own header doc says a step-2
     // (org-membership grant) failure after step-1 (the invite itself) succeeds is
-    // "recoverable, not... the whole invite failed" — but nothing here honored that
-    // distinction until now. A step-2 failure still means a PENDING profile now
-    // exists (the invite email is on its way), so the roster is invalidated the
+    // "recoverable, not... the whole invite failed", so the two are handled apart here.
+    // A step-2 failure still means a PENDING profile exists (the invite email is
+    // on its way), so the roster is invalidated the
     // same as a full success — just without resetting the form/closing the dialog,
     // since the org grant itself still needs the caller's attention (see the error
     // alert below, which shows a different message for this case).
@@ -279,9 +275,7 @@ export function TeamPage(): React.JSX.Element {
     // Drained to completion, not a single un-paged call — `listAccessProfiles` defaults to a
     // 20-item page (same SDK-documented default `fetchAllCasesForOrg` drains around for cases),
     // so a deployment with more than 20 team members would otherwise silently lose everyone past
-    // the first page, with no error and no "load more" to reach them. Live-found 2026-08-29: this
-    // session's own repeated smoke runs pushed a real roster past 20 for the first time, and a
-    // freshly-invited member landed on a page this screen never fetched.
+    // the first page, with no error and no "load more" to reach them.
     queryFn: () =>
       drainPages((startFrom) =>
         vectrosApiClient().auth.listAccessProfiles({
@@ -295,7 +289,7 @@ export function TeamPage(): React.JSX.Element {
   // grant this app ever authors (self-invite or Team-screen invite) is role-referencing; the one
   // thing that isn't is the platform's own auto-created SERVICE principal for this context (see
   // this blueprint's top-level `accessProfile:` block, deliberately inline-scoped and minimal).
-  // Filtered OUT of the roster entirely now (previously only labeled distinctly) — a screen meant
+  // Filtered OUT of the roster entirely rather than merely labeled distinctly — a screen meant
   // to show "who has access" for a human admin to manage shouldn't make them read past the
   // platform's own internal service account to find their actual team.
   const roster = (rosterQuery.data ?? []).filter(

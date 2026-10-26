@@ -2,11 +2,9 @@
 // useAccessibleOrgs — every org the signed-in caller can create a case or
 // send an invite into: orgs they FOUNDED, union orgs they hold `org_membership`
 // in. Shared by CreateCaseDialog's org picker and TeamPage's InviteDialog org
-// picker — both used to query ONLY `dataQueryKeys.orgsFounded()`, which
-// silently omitted any org an invited-not-founding case-handler or hr-admin
-// belongs to (never a founder, only ever a member — the exact gap
-// `CasesListPage`'s own case-list query hit and fixed for READS; this is the
-// same fix for the CREATE-side pickers).
+// picker. Querying ONLY `dataQueryKeys.orgsFounded()` would silently omit
+// any org an invited-not-founding case-handler or hr-admin belongs to
+// (never a founder, only ever a member), so member orgs are unioned in.
 //
 // Discovery mechanism: `records:r:org_membership` (self-only,
 // `dataScope: { userId: self.userId }`, held by both real-user roles this
@@ -98,8 +96,8 @@ export function useAccessibleOrgs(
 
   // `values: [myUserId]` is required, not optional — the API rejects a lookup with no
   // value/from+to/prefix mode set ("Provide one lookup mode"), it doesn't treat an omitted
-  // `values` as "match every org_membership row" (confirmed against the live staging API,
-  // 2026-08-28). The `dataScope { userId: self.userId }` on this grant would narrow the result to
+  // `values` as "match every org_membership row". The `dataScope { userId: self.userId }` on this
+  // grant would narrow the result to
   // the caller's own rows regardless, but the lookup mode still has to be supplied explicitly.
   // Drained to completion too — `lookupRecords` returns the same paged `{data, nextCursor}`
   // envelope (its own doc: "keep paging until nextCursor is null rather than stopping on an
@@ -135,13 +133,13 @@ export function useAccessibleOrgs(
     .map((q) => q.data)
     .filter((o): o is EntityResponse => o != null);
 
-  // `memberOrgQueries` (the per-membership-org `getEntity` fan-out) was previously left OUT of
+  // `memberOrgQueries` (the per-membership-org `getEntity` fan-out) must be part of
   // `isPending`/`isSuccess` —
-  // once `founderQuery`/`membershipQuery` settled, `isSuccess` flipped true and `orgs` was read as
+  // once `founderQuery`/`membershipQuery` settled, `isSuccess` would flip true and `orgs` be read as
   // final while a membership-discovered org's entity fetch was still in flight, so a caller with
-  // exactly one FOUNDED org and one MEMBER org saw a transient `orgs.length === 1` window: the org
-  // picker stayed hidden, the single (wrong, founder-only) org got silently auto-selected, and
-  // `canSubmit` went true — a real risk of creating a case / sending an invite against the wrong
+  // exactly one FOUNDED org and one MEMBER org would see a transient `orgs.length === 1` window: the org
+  // picker hidden, the single (wrong, founder-only) org silently auto-selected, and
+  // `canSubmit` true — a real risk of creating a case / sending an invite against the wrong
   // org before the member org popped in a moment later.
   const memberOrgQueriesPending = memberOrgQueries.some((q) => q.isPending);
   const isPending =

@@ -8,7 +8,7 @@
 //      catching async/Promise errors React does not see.
 //   3. Set the document title from BRAND so a fork re-skins by touching one
 //      file, not index.html.
-//   4. Instantiate the Auth0 adapter and wire the partner-API token minter
+//   4. Instantiate the Auth0 adapter and wire the Vectros API token minter
 //      to it.
 //   5. Mount the React tree under StrictMode + ErrorBoundary +
 //      QueryClientProvider + IntlProvider + ThemeProvider + Router.
@@ -61,7 +61,7 @@ const authProvider = new Auth0AuthProvider({
   authorizationParams: { audience: AUTH0_CONFIG.audience },
 });
 
-// 4a. Wire the partner-API token cache's minter to the just-instantiated
+// 4a. Wire the Vectros API token cache's minter to the just-instantiated
 //     adapter. The cache (consumed by non-React code, e.g. an SDK client's
 //     token supplier) stays provider-agnostic: it knows nothing about how a
 //     bearer is minted. Auth0AuthProvider.mintPartnerApiToken does the

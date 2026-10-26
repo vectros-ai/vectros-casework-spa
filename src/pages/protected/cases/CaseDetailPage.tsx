@@ -2,18 +2,17 @@
 // CaseDetailPage — screen 3 of this app's screen-by-screen design: a case's header + entries.
 //
 // **Entries are linked to their case by a `caseId` REFERENCE field, not by
-// ownership scope alone** — CORRECTED (owner-caught, 2026-08-27, a real data-
-// modeling error in the original design, not a query-shape nuance):
+// ownership scope alone**:
 // `case_note`/`case_document` are scoped `[org:<id>, client:<id>]` for
 // PERMISSIONS (this app authorizes client-by-client, not case-by-case — see
-// `case`'s own schema description), but that scope was ALSO being used to
-// pick out ONE case's own entries, which only works while every client has
+// `case`'s own schema description), but it cannot ALSO be used to
+// pick out ONE case's own entries: that only works while every client has
 // at most one case. `createCase()` explicitly supports a SECOND case for an
 // existing client, at which point both cases share the exact same
 // `client:<id>` scope and become indistinguishable by scope alone — a read-
 // only bug for notes (entries from two cases would mix), and a write-target
-// bug for documents (an upload could land in the wrong case's folder). The
-// fix: `case_note.caseId`/`case_document.caseId` are declared `fieldType:
+// bug for documents (an upload could land in the wrong case's folder). So
+// `case_note.caseId`/`case_document.caseId` are declared `fieldType:
 // reference` (`targetTypeName: case`, `targetField: externalId`) — a genuine
 // typed foreign key, never an ownership dimension — so a query can ask for
 // exactly one case's entries regardless of how many cases its client has.
@@ -25,10 +24,10 @@
 // is needed.
 //
 // **The entries query is `lookupRecords({type:'case_note', field:'caseId',
-// value: caseExternalId})`** — no client-side filtering needed any more; the
+// value: caseExternalId})`** — no client-side filtering needed; the
 // platform's own data-scope narrowing per-role (org-only for
 // hr-admin, org+client for case-handler) still runs underneath, unaffected
-// by this fix — this only changes WHICH rows the query asks for, not how
+// by this reference — it only changes WHICH rows the query asks for, not how
 // they're authorized. (`case-handler`'s two-real-dimension `scope:org`+
 // `scope:client` clause is still why this is `lookupRecords`, not
 // `listRecords` — a `listRecords` call's `scope` filter only ever takes ONE
@@ -45,19 +44,17 @@
 // that needs a case-handler picker, which needs the Team screen's member
 // list (the same platform gap CasesListPage's own note names).
 //
-// **Documents + Ask** — the two sections this screen's original design
-// deferred are now built: `CaseDocumentsSection` (list + upload) and
+// **Documents + Ask** — `CaseDocumentsSection` (list + upload) and
 // `CaseAskPanel` (a case-scoped RAG drawer, reached from here rather than a
 // standalone nav item — RAG is compartment-scoped by construction, there is
 // no "ask across everything" mode). Both use `caseId` the same way the notes
-// query does. The one folder `createCase()` creates per case is still used
+// query does. The one folder `createCase()` creates per case is used
 // as the upload TARGET (a real, human-facing organizational unit — "each
-// case gets its own folder"), but is no longer how a case's documents get
-// FOUND: `case`'s own schema now carries a `folderId` field, stamped at
+// case gets its own folder"), but is not how a case's documents get
+// FOUND: `case`'s own schema carries a `folderId` field, stamped at
 // create time, read directly off the already-loaded case record below — no
 // query needed, since folders themselves can't bind a schema (no lookup
-// fields possible), which is what made the old folder-listing approach
-// necessary in the first place.
+// fields possible) to look documents up by.
 // ---------------------------------------------------------------------------
 
 import { useState } from 'react';
@@ -144,8 +141,8 @@ export function CaseDetailPage(): React.JSX.Element {
   const caseExternalId = caseRecord?.externalId;
 
   // Breadcrumb — a case's org and client are its own scope dims, not payload
-  // fields (this file's own header comment), so nothing before this resolved
-  // them to a display name; the page just showed the case type alone with no
+  // fields (this file's own header comment), so they are resolved to a display
+  // name here; otherwise the page would show the case type alone with no
   // sense of which org/client it belongs to. Org links to OrgDetailPage (a
   // real screen); client has no detail screen yet, deliberately deferred, so
   // it's plain text, not a link, until that screen exists.
@@ -244,7 +241,7 @@ export function CaseDetailPage(): React.JSX.Element {
   const addEntryMutation = useMutation({
     mutationFn: () => {
       const schema = noteSchemaQuery.data;
-      // Live-tested and corrected: a `case_note` create stamps BOTH `org:<id>` AND
+      // A `case_note` create stamps BOTH `org:<id>` AND
       // `client:<id>` (`casework.blueprint.yaml`'s own comment: "a case/case_note/document create
       // always stamps BOTH... the platform's create-side guard denies a write outright unless the
       // authorizing clause has a key for EVERY dimension it stamps") — omitting `orgScope` here
@@ -422,8 +419,8 @@ export function CaseDetailPage(): React.JSX.Element {
       {/* `notesQuery` is disabled (never fires) when `caseExternalId` is undefined — react-query
           reports a disabled query's own `isPending` as permanently true (it never distinguishes
           "actively fetching" from "never enabled"), so checking `notesQuery.isPending` alone here
-          would spin forever with no request ever made and no error to show — confirmed live
-          against a real pre-existing case (2026-08-28). Once the CASE itself has loaded, a missing
+          would spin forever with no request ever made and no error to show.
+          Once the CASE itself has loaded, a missing
           `caseExternalId` is a known, terminal state (this file's own comment above: "a case that
           predates this field"), not a still-loading one — show that explicitly instead. */}
       {caseQuery.isSuccess && typeof caseExternalId !== 'string' && (

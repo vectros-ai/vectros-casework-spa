@@ -18,6 +18,7 @@ import type { InferenceStreamEvent } from '@vectros-ai/react';
 
 vi.mock('../../../api/vectrosApi', () => ({ vectrosApiClient: vi.fn(), CASEWORK_CONTEXT_ID: 'casework' }));
 import { vectrosApiClient } from '../../../api/vectrosApi';
+import { Vectros, VectrosError } from '@vectros-ai/sdk';
 
 const mockedClient = vi.mocked(vectrosApiClient);
 
@@ -32,6 +33,17 @@ const DONE = {
 
 async function* fromArray(events: InferenceStreamEvent[]): AsyncGenerator<InferenceStreamEvent> {
   for (const e of events) yield e;
+}
+
+// A refused SDK call as the real client throws it: the SDK's own error classes, so the fields the app reads
+// (`statusCode` and the parsed `body`) are the ones the SDK sets.
+function statusError(statusCode: number, body: unknown): Error {
+  switch (statusCode) {
+    case 429:
+      return new Vectros.TooManyRequestsError(body);
+    default:
+      return new VectrosError({ statusCode, body });
+  }
 }
 
 const NO_MODELS = { models: [], defaultModel: undefined };
@@ -55,7 +67,7 @@ describe('CaseAskPanel', () => {
     expect(screen.getByText("What's the latest status?")).toBeInTheDocument();
   });
 
-  it('asks scoped to this case\'s own id AND its org scope — a regression guard for a real bug: search.scope is what authorizes the request; search.filters alone 403s for every real user', async () => {
+  it('asks scoped to this case\'s own id AND its org scope — search.scope is what authorizes the request; search.filters alone 403s for every real user', async () => {
     const user = userEvent.setup();
     const ragInference = vi.fn().mockResolvedValue(
       fromArray([
@@ -158,9 +170,9 @@ describe('CaseAskPanel', () => {
   });
 
   it('shows the error alert even when the stream fails before any content_delta arrives', async () => {
-    // Regression guard: the empty-state condition used to check only
-    // `state.text.length` / `isStreaming`, so a run that errors before
-    // streaming any text reverted straight back to the suggested-prompts
+    // Regression guard: the empty-state condition must not check only
+    // `state.text.length` / `isStreaming`, or a run that errors before
+    // streaming any text reverts straight back to the suggested-prompts
     // empty state with the failure never shown at all.
     const user = userEvent.setup();
     const ragInference = vi
@@ -175,6 +187,79 @@ describe('CaseAskPanel', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('model unavailable');
     expect(screen.queryByText('Summarize this case')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [429, 'BALANCE_BUSY', 'Your pre-paid inference balance is busy. This is not a shortage: retry in a moment.'],
+    [503, 'BALANCE_UNAVAILABLE', 'A temporary fault interrupted the balance step. This is not a shortage: retry in a moment.'],
+  ])('shows the platform message for a call refused before the stream starts (%i %s), never the SDK error text', async (status, errorCode, message) => {
+    const user = userEvent.setup();
+    const ragInference = vi.fn().mockRejectedValue(statusError(status, { message, errorCode }));
+    renderPanel({
+      inference: { listInferenceModels: vi.fn().mockResolvedValue(NO_MODELS), ragInference },
+    });
+
+    await user.type(screen.getByPlaceholderText('Ask a question…'), 'Will this be refused?');
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(message);
+    expect(alert).not.toHaveTextContent(/Status code|Body:|BALANCE_/);
+  });
+
+  it.each([
+    [402, 'Insufficient inference balance. Please top up in the developer portal.'],
+    [403, 'Token scope does not permit inference operations.'],
+    [408, 'The request timed out before it finished.'],
+  ])('shows the platform message for a refused call (%i), never the SDK error text', async (status, message) => {
+    const user = userEvent.setup();
+    const ragInference = vi.fn().mockRejectedValue(statusError(status, { message }));
+    renderPanel({
+      inference: { listInferenceModels: vi.fn().mockResolvedValue(NO_MODELS), ragInference },
+    });
+
+    await user.type(screen.getByPlaceholderText('Ask a question…'), 'Will this be refused?');
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(message);
+    expect(alert).not.toHaveTextContent(/Status code|Body:/);
+  });
+
+  it.each([
+    [408, 'The request failed (status 408). Please try again.'],
+    [402, 'The request failed (status 402).'],
+    [403, 'The request failed (status 403).'],
+  ])('a refused call (%i) that carries no message shows a neutral status line', async (status, expected) => {
+    const user = userEvent.setup();
+    const ragInference = vi.fn().mockRejectedValue(statusError(status, undefined));
+    renderPanel({
+      inference: { listInferenceModels: vi.fn().mockResolvedValue(NO_MODELS), ragInference },
+    });
+
+    await user.type(screen.getByPlaceholderText('Ask a question…'), 'Will this be refused?');
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(expected);
+    expect(alert).not.toHaveTextContent(/Status code|Body:/);
+    // Only the retryable statuses invite another try.
+    expect(/try again/i.test(alert.textContent ?? '')).toBe(status === 408);
+  });
+
+  it('shows a neutral line with the status when a refused call carries no message', async () => {
+    const user = userEvent.setup();
+    const ragInference = vi.fn().mockRejectedValue(statusError(503, undefined));
+    renderPanel({
+      inference: { listInferenceModels: vi.fn().mockResolvedValue(NO_MODELS), ragInference },
+    });
+
+    await user.type(screen.getByPlaceholderText('Ask a question…'), 'Will this be refused?');
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('The request failed (status 503). Please try again.');
+    expect(alert).not.toHaveTextContent(/Status code|Body:/);
   });
 
   it('calls onClose when the close button is clicked', async () => {

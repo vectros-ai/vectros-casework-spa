@@ -25,7 +25,7 @@
 //
 // **Members section — `hr-admin`-only, gated on `records:c:client_membership`
 // (the only role holding write on that schema at all).** This is what makes
-// this pass's `entities:r:client` narrowing (founder-or-member) usable for a
+// the `entities:r:client` narrowing (founder-or-member) usable for a
 // case-handler who didn't found this client — see `useAccessibleClients`'s
 // own header comment for the discovery side, `assignClientMembership.ts` for
 // the write side.
@@ -103,9 +103,9 @@ interface AssignMemberDialogProps {
   readonly orgId: string;
   readonly clientId: string;
   /** `targetUserId`s already holding a `client_membership` row on this client — excluded from the
-   *  picker so an admin can't create a duplicate row for the same person (review finding,
-   *  2026-08-28: nothing previously stopped this; a duplicate rendered as two indistinguishable
-   *  rows in the Members table, keyed on the record's own `id`, not `targetUserId`). */
+   *  picker so an admin can't create a duplicate row for the same person (a duplicate would render
+   *  as two indistinguishable rows in the Members table, keyed on the record's own `id`, not
+   *  `targetUserId`). */
   readonly existingMemberUserIds: ReadonlySet<string>;
   readonly onClose: () => void;
   readonly onAssigned: () => void;
@@ -115,7 +115,7 @@ interface AssignMemberDialogProps {
  *  already has org-wide client reach, so granting one `client_membership`
  *  would be a real, legitimate no-op, not a control worth offering here.
  *
- *  **Known, accepted gap (review finding, 2026-08-28): the roster is
+ *  **Known, accepted gap: the roster is
  *  CONTEXT-WIDE, not org-scoped** — `GET /v1/app-contexts/{contextId}/
  *  profiles` has no per-org filter (same limitation `TeamPage.tsx`'s own
  *  header comment documents for its member roster), so this picker offers
@@ -124,7 +124,7 @@ interface AssignMemberDialogProps {
  *  here — cross-referencing every candidate against their own org
  *  memberships is real, separate scope, and `casework.blueprint.yaml`'s
  *  `scope:org` requirement on `entities:r:client`/`entities:u:client`
- *  (added the same review pass) means such a grant would be a real
+ *  means such a grant would be a real
  *  DEFENSE-IN-DEPTH backstop: the assigned case-handler still couldn't
  *  actually read/update the client, only hold an inert membership row. */
 function AssignMemberDialog({
@@ -462,12 +462,10 @@ export function ClientDetailPage(): React.JSX.Element {
   };
 
   // Shared by both mutations below — a rename OR an archive/reactivate both make the entity-level
-  // cache AND every list that might show this client stale. Review finding (2026-08-28): this used
-  // to invalidate `dataQueryKeys.client(id)` alone, leaving `ClientsListPage`/`CreateCaseDialog`'s
-  // existing-client picker showing a stale name or status for up to the query's `staleTime`. Mirrors
-  // `OrgDetailPage.tsx`'s own save/delete handlers, which invalidate both `org(id)` AND
-  // `orgsFounded()` for the identical reason — this page's own commit message claimed to follow that
-  // exact pattern; this closes the gap where it didn't.
+  // cache AND every list that might show this client stale. Invalidating `dataQueryKeys.client(id)`
+  // alone would leave `ClientsListPage`/`CreateCaseDialog`'s existing-client picker showing a stale
+  // name or status for up to the query's `staleTime`. Mirrors `OrgDetailPage.tsx`'s own save/delete
+  // handlers, which invalidate both `org(id)` AND `orgsFounded()` for the identical reason.
   const invalidateClientCaches = (): void => {
     void queryClient.invalidateQueries({ queryKey: dataQueryKeys.client(id) });
     if (orgId) {

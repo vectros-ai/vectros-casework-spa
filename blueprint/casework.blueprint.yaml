@@ -9,16 +9,16 @@
 # not a description of one.
 #
 # What this blueprint deliberately does NOT do: create any organizations, cases, or users —
-# including the first admin. This is a Shape 1, Captive Enterprise deployment (no self-signup at
+# including the first admin. This is a single-organization deployment (no self-signup at
 # all): whoever stands up this blueprint sends the first `hr-admin` invite themselves, out-of-band,
-# with a root API key (the README documents the exact command). That first `hr-admin` then
-# creates the org entity themselves once signed in, through the app itself — not seeded here —
-# using the same `entities:cud:org` grant every `hr-admin` holds, invited or not.
+# with `vectros identity invite` (no root key needed; the README documents the exact command).
+# That first `hr-admin` then creates the org entity themselves once signed in, through the app
+# itself — not seeded here — using the same `entities:cud:org` grant every `hr-admin` holds, invited or not.
 
 name: casework-hr-case-management
 version: "1.4.1"
 description: >
-  HR case management flagship — employer org -> employee case -> case entries + documents.
+  HR case management example — employer org -> employee case -> case entries + documents.
   Demonstrates BYO-IdP token exchange (Auth0), per-organization ownership compartments,
   per-principal isolation, hybrid search and RAG, with zero application backend.
 contextId: casework
@@ -51,14 +51,13 @@ inputs:
 
 # The trusted Auth0 issuer this deployment's sign-in flow exchanges tokens against.
 #
-# Deliberately NO `selfSignupPolicies` — Shape 1, Captive Enterprise has no self-signup at all:
+# Deliberately NO `selfSignupPolicies` — a single-organization deployment has no self-signup at all:
 # the entity deploying this blueprint IS the org, so there is no "arbitrary anonymous
 # signer-upper" to design a floor role for. A first-time sign-in with no outstanding invite is
 # correctly rejected — every identity, including the first admin, must already have a PENDING
 # invite bound to this issuer before the token exchange will bind them. The first `hr-admin` is
-# invited out-of-band by whoever deploys this blueprint, using a root API key against
-# `POST /v1/users/invite` (root bypasses the ordinary subset-of-caller-authority check — see the
-# README for the exact command); every subsequent invite goes through the app's own Team screen,
+# invited out-of-band by whoever deploys this blueprint, using `vectros identity invite` (no
+# root key needed; see the README for the exact command); every subsequent invite goes through the app's own Team screen,
 # gated by `hr-admin`'s member-lifecycle capability below. **There is exactly ONE onboarding
 # mechanism in this app** — the only thing that differs for person #1 is which credential sends the
 # invite, never a different code path.
@@ -584,7 +583,7 @@ roles:
         scope:org: ['${{ member.scope.org }}']
         scope:client: ['${{ under.self.userId }}', '${{ member.scope.client }}']
     # UPDATE — the client's founder (`under.self.userId` — creating a client entity stamps its own
-    # `partnerUserId` with the creator) OR any-level `client_membership`. Ordinary assigned-handler
+    # `userId` with the creator) OR any-level `client_membership`. Ordinary assigned-handler
     # write — ability to close or correct a case they're on. `scope:org` is included as
     # defense-in-depth against a `client_membership` row that names a client belonging to a
     # DIFFERENT org than the caller's own membership — the platform's entity-backed scope
@@ -789,8 +788,8 @@ roles:
         scope:client: ['${{ any }}']
     - allowedActions: [schemas:r]
     # `c` alongside `r`: a case's client entity must exist BEFORE the case does (a client is a
-    # real, reusable entity, not the case's own self-reference), so hr-admin — the only role
-    # self-signup can actually produce today — needs create authority here or it could never
+    # real, reusable entity, not the case's own self-reference), so hr-admin — the role the
+    # first invited admin holds — needs create authority here or it could never
     # create its own first case for a new employee.
     - allowedActions: [entities:cr:client]
       dataScope:

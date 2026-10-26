@@ -4,6 +4,46 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.0] - 2026-10-25
+
+### Added
+
+- **The model list in the case "Ask" panel shows the long-prompt rate.** A model priced by prompt length lists, beside its
+  standard credit rate, the rate charged for a prompt longer than its threshold (for example, for Claude Haiku 5.5, "prompts
+  over 100,000 tokens: 0.055/0.275 credits per 1k tokens"). The threshold and both rates come from the model catalog. Models
+  without a second rate are unchanged. Both rates are the US rates.
+
+### Fixed
+
+- **The model list in the case "Ask" panel shows the rate a default request is billed.** Requests are served from a US region
+  by default and billed the catalog's US rate, which is the base rate multiplied by the model's region premium (about 10% more
+  for most models, no difference for the rest). The list showed the base rate and so understated the cost of a default
+  request; it now shows the US rate.
+
+### Security
+
+- **Build tooling updated to patched releases.** `vite` is now 8.1.6 and `source-map-js` resolves to 1.2.2. Both are used only while building the app, so the built app
+  is unchanged. If you forked the app, raise your `vite` pin to 8.1.6 or later.
+
+### Changed
+
+- **A case "Ask" call refused before the answer starts shows the platform's message instead of the SDK's error text.** When the
+  platform refuses the call (a busy or interrupted pre-paid balance, a rate limit, a missing permission), the alert under the
+  title shows the platform's message, which for the retryable refusals says so in plain words (a busy balance is not a
+  shortage, and the call can be tried again in a moment). When the response carries no message, the alert shows a line with
+  the status that says to try again for a timeout, a rate limit or a server error. A failure with no status, such as an error
+  event in the stream or a network error, is shown as before. This needs `@vectros-ai/react` 0.16.0 or later.
+- **Text corrections.** The org-delete confirmation says it deletes the org record only and that its cases, entries and
+  documents are not deleted by this action. The client-archive confirmation says an archived client is marked Archived on its
+  page and is not hidden elsewhere. The empty-state hints say to create an org first.
+- **The README describes the audit trail as a retained version history.**
+- **The blueprint comments say the first admin is invited with `vectros identity invite`, which needs no root key, and its
+  `description` calls it an HR case management example.**
+- **Source comments describe the code as it is.** Behaviour is unchanged.
+- **Built against SDK 0.48.0.** The case "Ask" panel does not set the new optional `reasoning` request field, so its stream is
+  unchanged. See the
+  [SDK changelog](https://github.com/vectros-ai/vectros-api-spec/blob/main/CHANGELOG.md) for the full release.
+
 ## [1.3.2] - 2026-10-12
 
 ### Changed

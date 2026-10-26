@@ -119,7 +119,7 @@ describe('CasesListPage', () => {
   });
 
   it('a case-handler (never an org founder) sees cases via org_membership discovery', async () => {
-    // The actual bug this pass fixes: case-handler holds no `entities:r:org` founder-discovery
+    // A case-handler holds no `entities:r:org` founder-discovery
     // grant at all, so a founder-only org query would find zero orgs to fan out over. The org
     // fan-out uses `useAccessibleOrgs`, which unions in orgs discovered via the caller's own
     // `org_membership` rows — this pins that case-handler still sees cases through THAT path.
@@ -144,8 +144,8 @@ describe('CasesListPage', () => {
 
   it('refetches the case list when the refresh button is clicked', async () => {
     // Regression guard: a status change made on
-    // CaseDetailPage wasn't reflected back here because nothing ever invalidated this
-    // page's own query keys. This pins the fix's OTHER half — the manual refresh
+    // CaseDetailPage is reflected back here by invalidating this
+    // page's own query keys. This pins the OTHER half — the manual refresh
     // affordance itself actually re-pulls the case list.
     const user = userEvent.setup();
     const listEntities = founderOfOneOrg();
@@ -424,11 +424,11 @@ describe('CasesListPage', () => {
   });
 
   it('keys the cache by the accessible-org set, so a stale single-org cache entry is never served for a grown org set', async () => {
-    // Regression guard: before this fix, the query key was just `['cases', 'all']` -- constant
-    // across the caller's own org set growing, so a cache entry seeded under the OLD (smaller) org
-    // set would be served forever, never noticing a new membership grant landed. Seed the cache
-    // directly at the exact key the OLD code would have used (pre-fix, org-set-independent) and
-    // confirm this render -- with a caller who now reaches TWO orgs -- does not settle for it.
+    // Regression guard: a query key that was just `['cases', 'all']` would stay constant
+    // as the caller's own org set grows, so a cache entry seeded under a smaller org set would
+    // be served forever, never noticing a new membership grant landed. Seed the cache directly at
+    // that org-set-independent key and confirm this render -- with a caller who reaches TWO orgs --
+    // does not settle for it.
     const qc = testQueryClient();
     qc.setQueryData(['cases', 'all'], { data: [CASE_1], failedOrgCount: 0 });
 
@@ -520,7 +520,7 @@ describe('CasesListPage', () => {
       await user.click(screen.getByRole('button', { name: 'New case' }));
 
       await screen.findByRole('heading', { name: 'New case' });
-      // Owner feedback 2026-08-26: a single org must still be VISIBLE (not an
+      // A single org must still be VISIBLE (not an
       // editable picker — there's no real choice — but not silently hidden).
       const orgField = screen.getByLabelText('Org');
       expect(orgField).toBeDisabled();
@@ -560,7 +560,7 @@ describe('CasesListPage', () => {
       // makes the identity survive the dialog closing: `handleClose` clears every field and is
       // wired to the Dialog's own `onClose`, so Escape and a backdrop click reach it — a caller who
       // dismisses a failed submit, reopens and retypes the same values is retrying, and must not
-      // mint a second client, case and folder. An earlier version keyed on component state and was
+      // mint a second client, case and folder. Keying on component state would be
       // defeated by exactly that gesture. Edit-and-revert is the same property, without the modal
       // remount that makes a reopen assertion fight the test harness rather than the code.
       mockedUseScopeGate.mockReturnValue(CREATE_GATE);
@@ -649,8 +649,8 @@ describe('CasesListPage', () => {
     });
 
     it('disables every form field while the create mutation is in flight', async () => {
-      // Regression guard: the org/client/case-type/folder-name fields were previously still
-      // editable while a create was pending — changing the org selector mid-submit would fire
+      // Regression guard: the org/client/case-type/folder-name fields must not stay
+      // editable while a create is pending — changing the org selector mid-submit would fire
       // the mutation's onSuccess with the NEW org id, invalidating the wrong org's client-list
       // cache (the actual write was unaffected, only cache freshness drifted).
       mockedUseScopeGate.mockReturnValue(CREATE_GATE);
@@ -755,12 +755,12 @@ describe('CasesListPage', () => {
     });
 
     it('a case-handler with no founded org still sees the org picker via org_membership discovery', async () => {
-      // The actual bug this fixes: the org picker used to query `orgsFounded()` alone, which
+      // The org picker must not query `orgsFounded()` alone, which
       // never matches a case-handler (never a founder, only ever a member) — `useAccessibleOrgs`
       // unions in orgs discovered via the caller's own `org_membership` rows, the same discovery
       // grant CasesListPage's own case-list query already depends on for reads. `listRecords`
       // (the page's own "all" case-list load) and `lookupRecords` (useAccessibleOrgs's own-rows
-      // membership lookup, now keyed by `values`, see that hook's own test) are separate mocks —
+      // membership lookup, keyed by `values`, see that hook's own test) are separate mocks —
       // this test only cares that both resolve so the org picker renders.
       mockedUseScopeGate.mockReturnValue(CREATE_GATE);
       const user = userEvent.setup();

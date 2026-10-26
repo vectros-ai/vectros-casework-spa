@@ -36,19 +36,17 @@ export function CallbackPage(): React.JSX.Element {
   const [inviteAttemptFailed, setInviteAttemptFailed] = useState(false);
   const [done, setDone] = useState(false);
   // Guards against React StrictMode's dev-only double-invoke of this effect.
-  // Live-diagnosed 2026-08-28: an authorization code / PKCE transaction is
-  // one-time-use, and without this guard StrictMode's two near-simultaneous
-  // invocations both call handleRedirectCallback() and race for that single
-  // exchange -- one wins it (a real, successful token exchange), the other
-  // loses it and throws, rendering "Sign-in failed" even though sign-in
-  // genuinely succeeded moments earlier. (An earlier version of this effect
-  // used a `cancelled` flag to suppress a stale run's state updates -- that
-  // solves a different problem, silences the WRONG run here, and doesn't
-  // stop the losing run's handleRedirectCallback() call from firing in the
-  // first place. Dropped rather than layered on top of this guard: with
+  // An authorization code / PKCE transaction is one-time-use, and without this
+  // guard StrictMode's two near-simultaneous invocations both call
+  // handleRedirectCallback() and race for that single exchange -- one wins it
+  // (a real, successful token exchange), the other loses it and throws,
+  // rendering "Sign-in failed" even though sign-in genuinely succeeded moments
+  // earlier. A `cancelled` flag suppressing a stale run's state updates would
+  // not help: it silences the WRONG run here, and doesn't stop the losing run's
+  // handleRedirectCallback() call from firing in the first place. With
   // hasRunRef ensuring the work only ever runs once, there is no second,
   // stale run left to suppress, and React 18+ already no-ops a setState
-  // after a real unmount without warning, so nothing else to guard here.)
+  // after a real unmount without warning, so nothing else to guard here.
   // A ref, not a plain module-scope flag, so it resets on a genuine remount
   // (e.g. visiting /callback again in the same SPA session) -- useRef's
   // identity persists across StrictMode's simulated remount but is fresh on

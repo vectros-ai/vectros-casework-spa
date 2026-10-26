@@ -67,7 +67,7 @@ export const AUTH0_CONFIG: Auth0Config = {
 /**
  * Vectros API configuration for the token-exchange bridge:
  *   - `exchangeUrl` — the full URL of `POST /v1/auth/token/exchange`. Trades
- *     the Auth0 ACCESS token for a Vectros partner-API bearer (RFC 8693) —
+ *     the Auth0 ACCESS token for a Vectros API bearer (RFC 8693) —
  *     not the ID token, whose `aud` claim is always the Auth0 client id and
  *     could never satisfy the exchange endpoint's audience check.
  *   - `apiUrl` — the Vectros API the minted bearer unlocks. All `/v1/*`

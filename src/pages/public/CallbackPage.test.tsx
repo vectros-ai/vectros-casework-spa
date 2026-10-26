@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // CallbackPage tests — the single shared Auth0 redirect target for both plain
 // sign-in and first-login invite acceptance. The invite-bind branch (reading
-// pendingInvite.ts, calling acceptInvite()) is the new, previously-untested
-// logic; the plain-sign-in path is covered too so the two don't drift.
+// pendingInvite.ts, calling acceptInvite()) is the main subject here;
+// the plain-sign-in path is covered too so the two don't drift.
 // ---------------------------------------------------------------------------
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -24,8 +24,8 @@ function renderPage(
   // No blanket `getCurrentUser` default here, deliberately — each test picks it explicitly.
   // `AuthProvider`'s own mount-time refresh is what actually drives `isAuthenticated`, independent
   // of whether THIS page's own handleRedirectCallback/acceptInvite calls succeed. The redirect
-  // guard below now ALSO checks `!error` (a real bug fix — see the "isAuthenticated already true"
-  // test), so a failure test no longer needs to dodge `isAuthenticated` to get a meaningful
+  // guard below also checks `!error` (see the "isAuthenticated already true"
+  // test), so a failure test does not need to dodge `isAuthenticated` to get a meaningful
   // assertion; each test still picks `getCurrentUser` explicitly to match what it's testing.
   const provider = makeMockAuthProvider(overrides);
   const tree = (
@@ -78,7 +78,7 @@ describe('CallbackPage', () => {
   });
 
   it('REGRESSION: acceptInvite rejection still shows the error when isAuthenticated is ALREADY true — the redirect guard must not race it away', async () => {
-    // The real bug: Auth0's own handleRedirectCallback sets
+    // Auth0's own handleRedirectCallback sets
     // isAuthenticated true the moment IT succeeds, BEFORE the server-side acceptInvite() call
     // below even runs — so a realistic failure (Auth0 exchange succeeds, invite bind fails)
     // reaches `done` with isAuthenticated already true. Without `&& !error` on the redirect
@@ -99,15 +99,15 @@ describe('CallbackPage', () => {
   });
 
   it('REGRESSION: under StrictMode double-invoke, handleRedirectCallback runs exactly once and sign-in still lands on home', async () => {
-    // Live-diagnosed 2026-08-28: every local/smoke-suite login failed with
+    // Without the guard, a login can fail with
     // "Sign-in failed" despite Auth0's own token exchange succeeding over the
-    // network. Root cause was StrictMode's dev-only double effect-invoke: the
-    // OLD `cancelled`-flag guard stopped the stale run's own state updates,
-    // but did nothing to stop the stale run's handleRedirectCallback() call
-    // from actually firing and racing the live run for the one-time
+    // network. The cause is StrictMode's dev-only double effect-invoke: a
+    // `cancelled`-flag guard stops the stale run's own state updates, but does
+    // nothing to stop the stale run's handleRedirectCallback() call from
+    // actually firing and racing the live run for the one-time
     // authorization code, so the LIVE run (the one whose state commits) could
     // lose that race and render failure even though sign-in truly succeeded.
-    // This test pins the fix: exactly one call, and a clean landing on home.
+    // This test pins the guard: exactly one call, and a clean landing on home.
     const provider = renderPage(AUTHENTICATED, { strict: true });
 
     await screen.findByText('home');

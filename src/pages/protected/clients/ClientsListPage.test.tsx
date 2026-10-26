@@ -91,10 +91,9 @@ describe('ClientsListPage', () => {
   });
 
   it('shows a disabled field naming the org for a single-org caller, matching Cases/Team\'s own pattern', async () => {
-    // Regression guard: this page previously
-    // showed NEITHER a picker NOR a disabled fallback for a single-org caller -- silently
-    // omitting the field entirely, unlike CasesListPage's CreateCaseDialog and TeamPage's
-    // InviteDialog, which both already showed the org named in a disabled field.
+    // Regression guard: a single-org caller must see a disabled field naming the org, not
+    // NEITHER a picker NOR a fallback (silently omitting the field entirely), as
+    // CasesListPage's CreateCaseDialog and TeamPage's InviteDialog both show it.
     mockedUseScopeGate.mockReturnValue(CREATE_GATE);
     renderPage(singleOrgClient());
 
@@ -189,7 +188,7 @@ describe('ClientsListPage', () => {
   });
 
   it('navigates to the new client\'s detail page on create, instead of just closing with no feedback', async () => {
-    // Regression guard -- see OrgsListPage's identical fix.
+    // Regression guard -- same as OrgsListPage's.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(CREATE_GATE);
     const listSchemas = vi.fn().mockResolvedValue(
@@ -215,7 +214,7 @@ describe('ClientsListPage', () => {
   });
 
   it('does not show a required field as an error on a blank create-client form until it is touched', async () => {
-    // Regression guard -- see OrgsListPage's identical fix.
+    // Regression guard -- same as OrgsListPage's.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(CREATE_GATE);
     const listSchemas = vi.fn().mockResolvedValue(
@@ -248,10 +247,10 @@ describe('ClientsListPage', () => {
   });
 
   it('invalidates BOTH the broad org list AND the caller\'s own founder-discovery cache on create', async () => {
-    // Regression guard (review finding, 2026-08-28): this used to invalidate only the broad
+    // Regression guard: invalidating only the broad
     // org-wide list — which 403s for a case-handler (their own `entities:r:client` is
-    // founder/member-narrowed as of this pass) — so a case-handler creating their OWN client never
-    // saw it appear in their own list until an unrelated cache eviction. `entities:c:client` is
+    // founder/member-narrowed) — would mean a case-handler creating their OWN client never sees
+    // it appear in their own list until an unrelated cache eviction. `entities:c:client` is
     // granted org-wide to BOTH roles, so this is a real, reachable path, not a theoretical one.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(CREATE_GATE);

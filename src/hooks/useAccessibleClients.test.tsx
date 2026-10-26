@@ -60,9 +60,9 @@ describe('useAccessibleClients', () => {
     expect(listEntities).toHaveBeenCalledWith(
       expect.objectContaining({ namespace: 'client', scope: 'org:org_1' }),
     );
-    // Regression guard (live-staging finding, 2026-08-28): the live API rejects a lookup with no
-    // value/from+to/prefix mode set — an omitted `values` isn't "match every client_membership
-    // row", it's a 400. Pin the exact self-lookup shape so this can't silently regress again.
+    // Regression guard: the API rejects a lookup with no value/from+to/prefix mode set — an
+    // omitted `values` isn't "match every client_membership row", it's a 400. Pin the exact
+    // self-lookup shape so this can't silently regress.
     expect(lookupRecords).toHaveBeenCalledWith({
       type: 'client_membership',
       field: 'targetUserId',
@@ -150,8 +150,8 @@ describe('useAccessibleClients', () => {
 
   it('stays isPending (never flips isSuccess) while a membership-discovered client\'s entity fetch is still in flight', async () => {
     // Regression guard, same bug shape `useAccessibleOrgs.test.tsx`'s own identical test documents:
-    // this hook's `isPending` computation does fold in `memberClientQueries.some(q => q.isPending)`
-    // correctly, but nothing pinned it against a future regression until now.
+    // this hook's `isPending` computation must fold in `memberClientQueries.some(q => q.isPending)`,
+    // or `isSuccess` would flip before a membership-discovered client's entity fetch resolves.
     const listEntities = vi.fn().mockResolvedValue(pageOf([]));
     const lookupRecords = vi.fn().mockResolvedValue(
       pageOf([

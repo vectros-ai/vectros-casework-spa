@@ -122,10 +122,10 @@ describe('TeamPage', () => {
   });
 
   it('shows a pending invitee with its own localized label and color, not the raw status string in a "success" chip', async () => {
-    // Regression guard: STATUS_LABEL_IDS never mapped
-    // `pending` at all, so a freshly-invited teammate's status fell through to the raw
-    // unlocalized string, AND the old color logic (`status === 'suspended' ? default : success`)
-    // rendered it green -- visually indistinguishable from an actually-active member.
+    // Regression guard: STATUS_LABEL_IDS must map
+    // `pending`, or a freshly-invited teammate's status falls through to the raw
+    // unlocalized string, AND a `status === 'suspended' ? default : success` color rule
+    // would render it green -- visually indistinguishable from an actually-active member.
     mockedUseScopeGate.mockReturnValue(HR_ADMIN_GATE);
     const listAccessProfiles = vi.fn().mockResolvedValue(
       pageOf([
@@ -141,7 +141,7 @@ describe('TeamPage', () => {
     expect(activeChip).not.toBeNull();
     expect(pendingChip).toHaveClass('MuiChip-colorWarning');
     expect(activeChip).toHaveClass('MuiChip-colorSuccess');
-    // Distinct colors, not the pre-fix "both render as success/green" bug.
+    // Distinct colors, not both rendering as success/green.
     expect(pendingChip?.className).not.toBe(activeChip?.className);
   });
 
@@ -176,8 +176,8 @@ describe('TeamPage', () => {
   });
 
   it("shows a member's resolved email (with the principalId as a secondary reference) when the platform resolved one", async () => {
-    // hr-admin now holds users:r (this pass's own blueprint change) so a usr_ principal's email
-    // resolves onto AccessProfileResponse — see the blueprint's own comment on that grant.
+    // When the platform resolves a usr_ principal's email onto AccessProfileResponse the
+    // roster shows it; hr-admin does not itself hold users:r (see the blueprint's note on why).
     mockedUseScopeGate.mockReturnValue(HR_ADMIN_GATE);
     const listAccessProfiles = vi.fn().mockResolvedValue(
       pageOf([
@@ -258,7 +258,7 @@ describe('TeamPage', () => {
     await user.click(screen.getByRole('button', { name: 'Invite' }));
 
     expect(
-      await screen.findByText("You don't have an org to invite someone into yet — found one first."),
+      await screen.findByText("You don't have an org to invite someone into yet — create one first."),
     ).toBeInTheDocument();
     expect(listEntities).not.toHaveBeenCalled();
     // The email/role/org fields never render without a resolvable org — nothing to submit.
@@ -285,7 +285,7 @@ describe('TeamPage', () => {
 
     const emailField = await screen.findByLabelText(/Email/);
     await user.type(emailField, 'newbie@example.com');
-    // Owner feedback 2026-08-26: a single org must still be VISIBLE (not an
+    // A single org must still be VISIBLE (not an
     // editable picker — there's no real choice — but not silently hidden
     // either). Disabled, not absent.
     const orgField = screen.getByLabelText(/Org/);
@@ -352,13 +352,13 @@ describe('TeamPage', () => {
     await screen.findByText('No one else has been invited yet.');
     await user.click(screen.getByRole('button', { name: 'Invite' }));
 
-    expect(await screen.findByText(/found one first/i)).toBeInTheDocument();
+    expect(await screen.findByText(/create one first/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Email/)).not.toBeInTheDocument();
   });
 
   it('an invited-not-founding hr-admin sees their org via org_membership discovery, not just founder discovery', async () => {
-    // The actual bug this fixes: the org picker used to query `orgsFounded()` alone, so an
-    // hr-admin who was INVITED into an org (never founded one) had no org to pick from at all —
+    // The org picker must not query `orgsFounded()` alone, or an
+    // hr-admin who was INVITED into an org (never founded one) has no org to pick from at all —
     // `useAccessibleOrgs` unions in orgs discovered via the caller's own `org_membership` rows.
     const user = userEvent.setup();
     mockedUseScopeGate.mockReturnValue(HR_ADMIN_GATE);
