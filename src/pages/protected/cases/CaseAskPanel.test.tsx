@@ -22,13 +22,14 @@ import { Vectros, VectrosError } from '@vectros-ai/sdk';
 
 const mockedClient = vi.mocked(vectrosApiClient);
 
-const DONE = {
-  event: 'done' as const,
+// The stream's final event, carrying the charge in milli-cents.
+const DONE: InferenceStreamEvent = {
+  event: 'done',
   inputTokens: 1,
   outputTokens: 1,
   model: 'm',
   platformCreditsCharged: 0,
-  inferenceBalanceCentsCharged: 0,
+  inferenceBalanceCentsChargedMilli: 0,
 };
 
 async function* fromArray(events: InferenceStreamEvent[]): AsyncGenerator<InferenceStreamEvent> {

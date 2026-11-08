@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.1] - 2026-11-07
+
+### Changed
+
+- **The app is built on SDK 0.49.0.** Nothing it shows changes.
+
 ## [1.4.0] - 2026-10-25
 
 ### Added

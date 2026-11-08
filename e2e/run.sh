@@ -44,7 +44,7 @@ fail() { echo "  $FAIL $1" >&2; }
 # Step 1: prereq checks
 # -----------------------------------------------------------------------------
 step "Prerequisite checks"
-command -v node >/dev/null 2>&1 || { fail "node not on PATH (need >= 20)"; exit 2; }
+command -v node >/dev/null 2>&1 || { fail "node not on PATH (need >= 22.22)"; exit 2; }
 ok "node $(node --version)"
 [ -d node_modules ] || { fail "node_modules/ missing — run 'npm install' in this directory first"; exit 2; }
 ok "node_modules present"

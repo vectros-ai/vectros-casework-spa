@@ -6,13 +6,9 @@
 // showcase: an admin spins up their own employer org, and its case-management
 // data compartment, without anyone else touching a blueprint or a database.
 //
-// **Founder-only, for now.** An org an admin was INVITED into (rather than
-// founded) would also belong on this screen, badged distinctly from a
-// founded one — but reaching that set depends on a team/invite flow this app
-// doesn't build yet, so there is currently no way for a caller's session to
-// ever hold one. Every row here is a founded org; the founder badge is
-// rendered for forward compatibility with that later addition, not because
-// today's caller could be shown anything else.
+// **Founder-only.** This screen lists the orgs the caller founded. An org the
+// caller was invited into (rather than founded) is not listed here, so every
+// row is a founded org and carries the founder badge.
 //
 // Founding writes two things in one call: the org identity entity itself
 // (name) and its bound `org_profile` schema payload (industry/headquarters/

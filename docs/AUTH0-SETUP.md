@@ -71,7 +71,7 @@ Back in **Applications → Applications → [your application] → Settings**, f
 
 - **Allowed Callback URLs** — where Auth0 redirects back after login. For local development this
   is `https://localhost:3003/callback` (the app's default dev port — see **4a** below for why this
-  is `https://localhost`, not `http://127.0.0.1`, despite that being Vite's more common default).
+  is `https://localhost`, not `http://localhost` or `http://127.0.0.1`).
   Add your production URL here too once you have one, comma-separated.
 - **Allowed Logout URLs** — the origin to return to after sign-out, e.g. `https://localhost:3003`.
   Same rule as Callback URLs: add your production origin here too, comma-separated, once you have
@@ -83,11 +83,12 @@ Back in **Applications → Applications → [your application] → Settings**, f
 Leave **Application Login URI** empty — it's for a different feature (third-party-initiated
 login) this app doesn't use.
 
-## 4a. Local dev needs `https://localhost`, not `http://127.0.0.1` — a real invite send will 400 otherwise
+## 4a. Local dev needs `https://localhost`, not `http://localhost` — a real invite send will 400 otherwise
 
-**Easy to get partway through local setup without hitting this** — sign-in itself works fine over
-plain `http://127.0.0.1:3003`, and everything up through browsing the app as an existing member
-looks normal. It only bites the first time you actually **send** an invite (`Team → + Invite`).
+**Easy to get partway through local setup without hitting this** — without a local certificate the dev
+server runs on plain `http://localhost:3003`, which signs in only if you also register that `http://`
+origin in step 4, and everything up through browsing the app as an existing member looks normal. It only
+bites the first time you actually **send** an invite (`Team → + Invite`).
 
 The platform's invite endpoint unconditionally
 rejects an `acceptUrl` whose scheme isn't `https://` or whose host is an IP literal
@@ -95,8 +96,8 @@ rejects an `acceptUrl` whose scheme isn't `https://` or whose host is an IP lite
 anti-SSRF rule, not a bug to work around. `inviteMember.ts` builds `acceptUrl` from
 `window.location.origin` at call time, so whatever origin the dev server actually runs on is what
 gets sent — meaning the dev server itself needs to be on an origin that satisfies this rule.
-`https://localhost:3003` does (`localhost` is a hostname, not an IP literal); `http://127.0.0.1:3003`
-never will, no matter what else you configure.
+`https://localhost:3003` does (`localhost` is a hostname, not an IP literal); an `http://` origin or an
+IP literal such as `127.0.0.1` never will, no matter what else you configure.
 
 **Set it up once, with [`mkcert`](https://github.com/FiloSottile/mkcert)** (installs a local CA
 into your OS/browser trust stores, so the resulting cert is trusted with zero warnings — a plain
@@ -114,7 +115,7 @@ mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost-cert.pem loc
 `vite.config.ts` picks this up automatically if present (`.cert/` is gitignored — regenerate it
 per clone/machine) and falls back to plain `http://` if it's absent, so `npm run dev` still runs
 without it — you just can't send a real invite until you've done this. `npm run dev` then serves
-on `https://localhost:3003` instead of `http://127.0.0.1:3003`; update the Auth0 URLs in step 4
+on `https://localhost:3003` instead of `http://localhost:3003`; update the Auth0 URLs in step 4
 above to match before your next login.
 
 ## 5. Register the issuer with your Vectros deployment
@@ -122,6 +123,7 @@ above to match before your next login.
 Apply this app's blueprint ([`blueprint/casework.blueprint.yaml`](../blueprint/casework.blueprint.yaml)) with your Auth0 values as inputs, run from this app's own directory:
 
 ```bash
+vectros login   # if you aren't already
 vectros blueprint apply blueprint/casework.blueprint.yaml --tenant test \
   --set companyName="Your Company" \
   --set auth0Domain=<your Auth0 domain> \

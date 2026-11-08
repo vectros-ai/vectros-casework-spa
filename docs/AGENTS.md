@@ -95,11 +95,11 @@ than this doc's summary of it. Two things worth knowing before you start editing
 ## Verifying a change
 
 This app ships with an end-to-end Playwright suite in [`e2e/`](../e2e) (sign-in, orgs, clients,
-cases, team/invite) that runs against a real Vectros deployment using your own Auth0 test identity
+cases with a happy-path document upload, search, team/invite) that runs against a real Vectros deployment using your own Auth0 test identity
 — see [`e2e/README.md`](../e2e/README.md) for setup and `e2e/run.sh` to run it. It's the fastest way
 to confirm a change didn't break the core flows, but it has real gaps, named in its own README: no
-`case-handler`-role coverage (every spec runs as `hr-admin`, the broader role), no "Ask" panel
-coverage, no document-upload coverage. Don't treat a green run as proof those paths still work.
+`case-handler`-role coverage (every spec runs as `hr-admin`, the broader role) and no "Ask" panel
+coverage. Don't treat a green run as proof those paths still work.
 It also isn't wired into this repo's own CI as an automated gate — run it yourself before and after
 a change that touches auth, roles, or any of the flows it does cover.
 

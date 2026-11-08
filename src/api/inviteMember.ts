@@ -84,9 +84,8 @@ export async function inviteMember(input: InviteMemberInput): Promise<InviteMemb
   //    custom domain later) with nothing to keep in sync. Must be `https://`
   //    with a real domain-name host (rejected for `http://` and for an IP
   //    literal) — the platform validates this whenever `acceptUrl` is
-  //    supplied at all, including the operator's own out-of-band first-admin
-  //    `sendEmail: false` call documented in this app's README, so a plain
-  //    `http://localhost` origin now fails validation there too.
+  //    supplied at all, including a manual-send (`sendEmail: false`) invite, so a
+  //    plain `http://localhost` origin fails validation there too.
   const invite = await api.auth.createInvite({
     email: trimmedEmail,
     contextId: CASEWORK_CONTEXT_ID,

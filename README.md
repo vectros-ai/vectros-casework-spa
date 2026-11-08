@@ -17,7 +17,7 @@ my org" and "what can they see" needs enforcing, not just displaying. It's a gen
 reference implementation, not a claim that this specific app is ready to replace a real HR product.
 Other access shapes Vectros supports (a self-signed-up founder creating their own isolated
 compartment, a public "floor" role with staff elevated on top) use the same underlying primitives
-differently; this is the first one published.
+differently.
 
 **What's built:**
 
@@ -58,7 +58,7 @@ Vectros's own API directly, and Vectros's own authorization model does the rest.
 Five steps, in order, from a fork to a running instance with your own first admin signed in. Each
 step links to a deeper doc for the parts worth explaining in full rather than cramming here.
 
-**1. Clone and install**
+**1. Clone and install** (Node 22.22 or later)
 
 ```bash
 npm install
@@ -81,7 +81,7 @@ Vercel dashboard's own environment variables instead.
 authorizes one for the other. Full walkthrough: [`docs/AUTH0-SETUP.md`](docs/AUTH0-SETUP.md).
 
 **3. Apply this app's blueprint to your Vectros deployment** — provisions the roles, schemas, and
-trusted-issuer registration this app needs; creates no users yet.
+trusted-issuer registration this app needs; creates no sign-in users yet.
 [`docs/AUTH0-SETUP.md`](docs/AUTH0-SETUP.md) step 5 has the exact command
 (`vectros blueprint apply blueprint/casework.blueprint.yaml --tenant test ...`, `@vectros-ai/cli` 0.23.0 or later). On platform 0.45.0 and later the
 new issuer then starts `pending_verification` and accepts no sign-in until you prove you control the Auth0

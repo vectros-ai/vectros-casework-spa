@@ -13,12 +13,12 @@ Seven spec files, run in numeric order (`fullyParallel: false`, `workers: 1`):
   own "Sign-in failed" error screen, not a blank page. No real Auth0 login involved — deliberately
   its own file so it never pays for (or depends on) a real hosted-login round trip.
 - **`01-login.spec.ts`** — sign in through the real Auth0-hosted Universal Login page, land
-  authenticated, mint a Vectros partner-API token off the session.
+  authenticated, mint a Vectros API token off the session.
 - **`02-orgs.spec.ts`** — create (idempotent — reuses an existing fixture org by name), edit, and
   delete an org.
 - **`03-clients.spec.ts`** — create (idempotent, org-scoped), edit, archive/reactivate a client.
 - **`04-cases.spec.ts`** — create a case for an existing client, the status filter (`All`/`Open`/
-  `Active`/`Closed`), case-detail status change + add an entry, and the org column that only
+  `Closed`), case-detail status change + add an entry, and the org column that only
   appears once a caller's cases span more than one org.
 - **`05-team.spec.ts`** — the roster lists the signed-in caller correctly, and a live invite
   exercises the invite flow end to end.
@@ -27,7 +27,7 @@ Seven spec files, run in numeric order (`fullyParallel: false`, `workers: 1`):
 
 `fixtures/testData.ts` holds the shared, idempotent fixture-creation helpers (`ensureOrgExists`,
 `ensureClientExists`, `pickOrgIfPresent`) the org/client/case specs build on — two persistent
-fixture orgs (`Smoke Org A`/`Smoke Org B`) and one fixture client, reused across runs rather than
+fixture orgs (`Smoke Org A`/`Smoke Org B`) and two fixture clients (`Smoke Client A`/`Smoke Client B`), reused across runs rather than
 grown fresh every time. Cases and team invites are **not** deduped the same way: neither has a
 delete UI in this app, so each run creates a little more of both — accepted as harmless clutter,
 the same tradeoff most e2e suites make elsewhere.
@@ -45,9 +45,8 @@ the same tradeoff most e2e suites make elsewhere.
   paths (self-founded-only clients, membership-gated reach) are untested here.
 - **No full accept-invite round trip for a SECOND identity.** `05-team.spec.ts` confirms an invite
   succeeds and the roster reflects it, not a second party actually accepting it and signing in.
-  (The smoke user's OWN accept-invite + first-login round trip **is** exercised — see
-  `fixtures/authed.ts` — this gap is specifically about a *second*, distinct identity's full loop,
-  which would need its own throwaway Auth0 user.)
+  (No spec accepts an invite at all: the smoke user must already have accepted its own, and
+  `fixtures/authed.ts` only signs it in. Covering the accept loop would need its own throwaway Auth0 user.)
 - **Multi-org membership-only discovery path untested.** `useAccessibleOrgs`/`useAccessibleClients`
   union founder reach with membership reach; this suite only exercises the founder path (the smoke
   user founds every fixture org/client itself).
@@ -63,7 +62,9 @@ the same tradeoff most e2e suites make elsewhere.
   it only supplies the test user's own credentials (below). Skip this if you're only ever running
   `--deployed` against an already-deployed instance (no local Vite boot, so the app's own env
   config is irrelevant here).
-- A dedicated test user in your own Auth0 tenant (not a real human's account)
+- A dedicated test user in your own Auth0 tenant (not a real human's account), invited as `hr-admin` with
+  `vectros identity invite` and with the invite already accepted (the app's README, step 5): the specs create
+  orgs and use the Team and Search screens, which only that role reaches
 - **A local dev cert for the app** (`.cert/` at the repo root) — this suite runs the app over
   `https://localhost:3003`, not plain `http`, because the invite flow's `acceptUrl` validation
   requires it. Generate one per clone/machine — see `../docs/AUTH0-SETUP.md`. Not needed for
