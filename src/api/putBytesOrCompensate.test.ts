@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { presignedUploadHeaders, putBytesOrCompensate } from './putBytesOrCompensate';
+import { presignedPutHeaders, presignedUploadHeaders, putBytesOrCompensate } from './putBytesOrCompensate';
 
 // The upload address comes back from the API and the file's bytes are sent to whatever it names.
 // Only an https address is used, the value used is the one that was checked, and a refused address
@@ -79,5 +79,52 @@ describe('presignedUploadHeaders', () => {
     expect(presignedUploadHeaders({ requiredHeaderName: '', requiredHeaderValue: '*' })).toEqual({});
     expect(presignedUploadHeaders({ requiredHeaderName: 42, requiredHeaderValue: '*' })).toEqual({});
     expect(presignedUploadHeaders({ requiredHeaderName: 'If-None-Match' })).toEqual({});
+  });
+});
+
+describe('requiredHeaders (a bound upload)', () => {
+  const FILE = new File(['bytes'], 'a.pdf', { type: 'application/pdf' });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('prefers the requiredHeaders map over the single pair, and falls back to the pair', () => {
+    expect(
+      presignedUploadHeaders({
+        requiredHeaders: { 'Content-Type': 'image/png', 'If-None-Match': '*' },
+        requiredHeaderName: 'If-None-Match',
+        requiredHeaderValue: '*',
+      }),
+    ).toEqual({ 'Content-Type': 'image/png', 'If-None-Match': '*' });
+    expect(presignedUploadHeaders({ requiredHeaders: {}, requiredHeaderName: 'If-None-Match', requiredHeaderValue: '*' })).toEqual({
+      'If-None-Match': '*',
+    });
+    expect(presignedUploadHeaders({ requiredHeaders: { a: 1, '': 'x' } })).toEqual({});
+  });
+
+  it('sends the signed Content-Type instead of fileType, never two spellings of it', () => {
+    expect(presignedPutHeaders({ requiredHeaders: { 'content-type': 'image/png' } }, 'application/octet-stream')).toEqual({
+      'content-type': 'image/png',
+    });
+    expect(presignedPutHeaders({ requiredHeaderName: 'If-None-Match', requiredHeaderValue: '*' }, 'application/pdf')).toEqual({
+      'Content-Type': 'application/pdf',
+      'If-None-Match': '*',
+    });
+  });
+
+  it('PUTs with every header in requiredHeaders', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+    await putBytesOrCompensate(
+      {
+        id: 'doc_1',
+        uploadUrl: 'https://s3.example/put',
+        requiredHeaders: { 'Content-Type': 'application/pdf', 'If-None-Match': '*' },
+      },
+      FILE,
+      'application/octet-stream',
+      async () => undefined,
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({ 'Content-Type': 'application/pdf', 'If-None-Match': '*' });
   });
 });

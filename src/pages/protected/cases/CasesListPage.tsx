@@ -204,7 +204,7 @@ function CreateCaseDialog({
         // prevents the duplicate: only a 2xx or an unknown-outcome response is remembered under the
         // key, so any other failure is retried for real.
         //
-        // The nonce is what keeps the other direction honest: after a successful create it is
+        // The nonce is what keeps the other direction correct: after a successful create it is
         // replaced, so an identical case deliberately raised again is a genuinely new submission
         // rather than a 24h replay of the first. And because the fingerprint covers the whole
         // payload, an edited form arrives under a different key instead of colliding with a used

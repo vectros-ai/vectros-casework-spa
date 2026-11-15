@@ -255,7 +255,7 @@ describe('ClientDetailPage', () => {
     // First resolve is the initial load (ACTIVE); every subsequent one (the post-archive
     // refetch this page's own invalidateClientCaches triggers) reflects the real new status --
     // otherwise `isSuspended` would stay stale and the success alert's own isSuspended-keyed
-    // message choice couldn't be exercised honestly.
+    // message choice couldn't be exercised properly.
     const getEntity = vi.fn().mockResolvedValueOnce(CLIENT).mockResolvedValue({ ...CLIENT, status: 'SUSPENDED' });
     const listSchemas = vi.fn().mockResolvedValue(pageOf([SCHEMA]));
     const updateEntity = vi.fn().mockResolvedValue({ ...CLIENT, status: 'SUSPENDED' });

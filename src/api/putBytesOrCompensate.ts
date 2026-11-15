@@ -12,6 +12,7 @@ export async function putBytesOrCompensate(
     readonly id?: string | undefined;
     readonly uploadUrl?: string | undefined;
     readonly created?: boolean | undefined;
+    readonly requiredHeaders?: unknown;
     readonly requiredHeaderName?: unknown;
     readonly requiredHeaderValue?: unknown;
   },
@@ -25,11 +26,11 @@ export async function putBytesOrCompensate(
     const uploadUrl = httpsUrlOrNull(created.uploadUrl);
     if (!uploadUrl) throw new Error('upload did not return an https presigned URL');
     // PUT the raw bytes straight to S3 — the presigned URL is self-authenticating, so NO
-    // Authorization header (one would break the signature). Content-Type must match the fileType
-    // we declared, and any header the response requires is part of the signature too.
+    // Authorization header (one would break the signature). Every header the response requires is
+    // part of the signature, the Content-Type of a bound upload among them.
     const put = await fetch(uploadUrl, {
       method: 'PUT',
-      headers: { 'Content-Type': fileType, ...presignedUploadHeaders(created) },
+      headers: presignedPutHeaders(created, fileType),
       body: file,
     });
     if (!put.ok) throw new Error(`file upload failed: ${put.status}`);
@@ -63,22 +64,44 @@ export async function putBytesOrCompensate(
 }
 
 /**
- * The extra header a presigned upload URL requires, as named by the upload response.
+ * The headers a presigned upload URL requires, as named by the upload response.
  *
- * The platform can bake an S3 conditional-write precondition (for example `If-None-Match: *`, which
- * makes the URL single-use) into the URL's own signature. A PUT that omits that header, or changes
- * its value, fails signature validation with a 403 before the bytes are accepted.
+ * An upload that sent `size` is bound: the URL is signed for an exact length and `Content-Type`, and the response's
+ * `requiredHeaders` map carries every header the PUT must send, that `Content-Type` among them (the media type as stored, which can
+ * differ from the `fileType` sent). The platform can also bake an S3 conditional-write precondition (for example
+ * `If-None-Match: *`, which makes the URL single-use) into the signature. A PUT that omits one of these, or changes its value,
+ * fails signature validation with a 403 before the bytes are accepted.
  *
- * Read from the response, never hard-coded, and only when the response carries a name: an API
- * version that does not return these fields gets no extra header, exactly as before. Checked at
- * runtime because the client library in use may predate the fields and so cannot type them.
+ * The map is used when present; otherwise the older single `requiredHeaderName`/`requiredHeaderValue` pair, so an API version
+ * that does not return the map still works. Read from the response, never hard-coded, and checked at runtime.
  */
 export function presignedUploadHeaders(response: {
+  readonly requiredHeaders?: unknown;
   readonly requiredHeaderName?: unknown;
   readonly requiredHeaderValue?: unknown;
 }): Record<string, string> {
-  const { requiredHeaderName, requiredHeaderValue } = response;
+  const { requiredHeaders, requiredHeaderName, requiredHeaderValue } = response;
+  if (typeof requiredHeaders === 'object' && requiredHeaders !== null && !Array.isArray(requiredHeaders)) {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(requiredHeaders as Record<string, unknown>)) {
+      if (k !== '' && typeof v === 'string') out[k] = v;
+    }
+    if (Object.keys(out).length > 0) return out;
+  }
   if (typeof requiredHeaderName !== 'string' || requiredHeaderName === '') return {};
   if (typeof requiredHeaderValue !== 'string') return {};
   return { [requiredHeaderName]: requiredHeaderValue };
+}
+
+/**
+ * The PUT's headers: the required ones, and `Content-Type: fileType` only when they do not name a `Content-Type` themselves (in
+ * any letter case: two spellings of one header would be sent as one combined value, which no signature matches).
+ */
+export function presignedPutHeaders(
+  response: Parameters<typeof presignedUploadHeaders>[0],
+  fileType: string,
+): Record<string, string> {
+  const required = presignedUploadHeaders(response);
+  const namesContentType = Object.keys(required).some((k) => k.toLowerCase() === 'content-type');
+  return namesContentType ? required : { 'Content-Type': fileType, ...required };
 }

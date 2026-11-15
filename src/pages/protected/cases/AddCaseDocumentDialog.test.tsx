@@ -61,6 +61,17 @@ describe('AddCaseDocumentDialog', () => {
     vi.unstubAllGlobals();
   });
 
+  it('uploads an empty file without a size (the API takes a size of at least 1)', async () => {
+    const listSchemas = vi.fn().mockResolvedValue(pageOf([SCHEMA]));
+    const uploadDocument = vi.fn().mockResolvedValue({ id: 'doc_1', uploadUrl: 'https://s3.example/put' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    renderDialog({ schemas: { listSchemas }, documents: { uploadDocument } });
+    await pickFile(screen.getByLabelText('File'), new File([], 'empty.pdf', { type: 'application/pdf' }));
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Upload' }));
+    await waitFor(() => expect(uploadDocument).toHaveBeenCalled());
+    expect(uploadDocument.mock.calls[0]?.[0]).not.toHaveProperty('size');
+  });
+
   it("uploads the chosen file scoped to the case's own org/client and folder, bound to the case_document schema", async () => {
     const listSchemas = vi.fn().mockResolvedValue(pageOf([SCHEMA]));
     const uploadDocument = vi
@@ -82,6 +93,7 @@ describe('AddCaseDocumentDialog', () => {
       expect(uploadDocument).toHaveBeenCalledWith({
         fileName: 'intake.pdf',
         fileType: 'application/pdf',
+        size: 5,
         storeText: true,
         schemaId: 'schema_case_document',
         folderId: 'folder_1',

@@ -22,7 +22,7 @@
 //    section), which is what makes this source non-vacuous.
 //
 // Overall `isError` is true only if EVERY source failed — one working
-// source is a real, honest result; erroring only reflects a caller for whom
+// source is a real result; erroring only reflects a caller for whom
 // nothing at all resolved (broken auth, network down), not "the broad query
 // 403'd, which is normal for a case-handler."
 // ---------------------------------------------------------------------------

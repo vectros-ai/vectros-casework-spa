@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.2] - 2026-11-14
+
+### Changed
+
+- **The app is built on SDK 0.50.0.** Nothing it shows changes.
+- **A case document's upload sends the file's exact size**, so the upload is bound to that size and media type and a file that does
+  not match is refused before anything is stored. The upload sends every header the API requires for it. An empty file is sent
+  without a size.
+
 ## [1.4.1] - 2026-11-07
 
 ### Changed

@@ -96,6 +96,10 @@ export function AddCaseDocumentDialog({
       const created = await vectrosApiClient().documents.uploadDocument({
         fileName: file.name,
         fileType,
+        // The exact byte length, which binds the upload: the URL is signed for this length and for the media type the response
+        // names, so a body that does not match is refused before anything is stored. The API takes a size of at least 1, so an
+        // empty file is sent unbound.
+        ...(file.size > 0 ? { size: file.size } : {}),
         storeText,
         schemaId,
         folderId,
