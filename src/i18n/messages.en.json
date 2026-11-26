@@ -142,6 +142,7 @@
   "addCaseDocument.changeFile": "Change file",
   "addCaseDocument.noFileChosen": "No file chosen.",
   "addCaseDocument.fileTooLarge": "This file is larger than the 100 MB limit.",
+  "addCaseDocument.fileEmpty": "This file is empty. Choose a file with content.",
   "addCaseDocument.uploading": "Uploading…",
   "addCaseDocument.storeText": "Keep the extracted text",
   "addCaseDocument.storeTextHelp": "On: the text extracted from the file stays retrievable. Off: it is discarded once indexing finishes, so it cannot be read back or asked about by document. Search and the original download are unaffected either way.",

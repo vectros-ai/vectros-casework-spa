@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.5.0] - 2026-11-25
+
+### Changed
+
+- **The app is built on SDK 0.51.0.**
+- **An empty file cannot be added to a case.** Upload document says the file is empty and sends nothing.
+
 ## [1.4.2] - 2026-11-14
 
 ### Changed

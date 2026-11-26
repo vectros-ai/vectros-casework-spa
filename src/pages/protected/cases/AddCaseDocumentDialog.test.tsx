@@ -61,15 +61,23 @@ describe('AddCaseDocumentDialog', () => {
     vi.unstubAllGlobals();
   });
 
-  it('uploads an empty file without a size (the API takes a size of at least 1)', async () => {
+  it('refuses an empty file before ever calling uploadDocument (the upload needs a size of at least 1); a file with content then uploads', async () => {
     const listSchemas = vi.fn().mockResolvedValue(pageOf([SCHEMA]));
     const uploadDocument = vi.fn().mockResolvedValue({ id: 'doc_1', uploadUrl: 'https://s3.example/put' });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
     renderDialog({ schemas: { listSchemas }, documents: { uploadDocument } });
     await pickFile(screen.getByLabelText('File'), new File([], 'empty.pdf', { type: 'application/pdf' }));
+    expect(await screen.findByText('This file is empty. Choose a file with content.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled();
+    expect(uploadDocument).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await pickFile(screen.getByLabelText('File'), new File(['%PDF-'], 'note.pdf', { type: 'application/pdf' }));
+    expect(screen.queryByText('This file is empty. Choose a file with content.')).not.toBeInTheDocument();
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Upload' }));
-    await waitFor(() => expect(uploadDocument).toHaveBeenCalled());
-    expect(uploadDocument.mock.calls[0]?.[0]).not.toHaveProperty('size');
+    await waitFor(() => expect(uploadDocument).toHaveBeenCalledTimes(1));
+    expect(uploadDocument.mock.calls[0]?.[0]).toMatchObject({ fileName: 'note.pdf', size: 5 });
   });
 
   it("uploads the chosen file scoped to the case's own org/client and folder, bound to the case_document schema", async () => {

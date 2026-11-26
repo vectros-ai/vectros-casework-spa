@@ -90,6 +90,10 @@ export function AddCaseDocumentDialog({
       if (file.size > MAX_UPLOAD_BYTES) {
         throw new Error(intl.formatMessage({ id: 'addCaseDocument.fileTooLarge' }));
       }
+      // The upload declares the file's exact length, which must be at least 1 byte.
+      if (file.size === 0) {
+        throw new Error(intl.formatMessage({ id: 'addCaseDocument.fileEmpty' }));
+      }
       const schemaId = schemaQuery.data?.id;
       if (!schemaId) throw new Error('case_document schema not resolved');
       const fileType = file.type || 'application/octet-stream';
@@ -97,9 +101,8 @@ export function AddCaseDocumentDialog({
         fileName: file.name,
         fileType,
         // The exact byte length, which binds the upload: the URL is signed for this length and for the media type the response
-        // names, so a body that does not match is refused before anything is stored. The API takes a size of at least 1, so an
-        // empty file is sent unbound.
-        ...(file.size > 0 ? { size: file.size } : {}),
+        // names, so a body that does not match is refused before anything is stored. An empty file is refused above.
+        size: file.size,
         storeText,
         schemaId,
         folderId,
@@ -122,10 +125,12 @@ export function AddCaseDocumentDialog({
   });
 
   const fileTooLarge = file !== null && file.size > MAX_UPLOAD_BYTES;
+  const fileEmpty = file !== null && file.size === 0;
   const canSubmit =
     !mutation.isPending &&
     file !== null &&
     !fileTooLarge &&
+    !fileEmpty &&
     typeof schemaQuery.data?.id === 'string';
 
   return (
@@ -147,7 +152,12 @@ export function AddCaseDocumentDialog({
               type="file"
               hidden
               aria-label={intl.formatMessage({ id: 'addCaseDocument.fileLabel' })}
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                // A new pick replaces the last attempt's outcome, so a stale error never sits beside this file's message
+                // (an upload still in progress keeps its outcome).
+                if (!mutation.isPending) mutation.reset();
+              }}
             />
             <Button
               variant="outlined"
@@ -162,7 +172,7 @@ export function AddCaseDocumentDialog({
               <Chip
                 label={`${file.name} · ${formatBytes(file.size)}`}
                 onDelete={() => setFile(null)}
-                color={fileTooLarge ? 'error' : 'default'}
+                color={fileTooLarge || fileEmpty ? 'error' : 'default'}
                 variant="outlined"
                 sx={{ mt: 1.5, maxWidth: '100%' }}
               />
@@ -174,6 +184,11 @@ export function AddCaseDocumentDialog({
             {fileTooLarge && (
               <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
                 <FormattedMessage id="addCaseDocument.fileTooLarge" />
+              </Typography>
+            )}
+            {fileEmpty && (
+              <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                <FormattedMessage id="addCaseDocument.fileEmpty" />
               </Typography>
             )}
             {mutation.isPending && (

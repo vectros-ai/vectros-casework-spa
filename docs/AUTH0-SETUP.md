@@ -275,9 +275,8 @@ only when a login looks risky. Until you configure a policy, clicking the button
 no-op re-login.
 
 If you want an in-app screen showing a user's own enrolled factors with add/remove controls (this
-app deliberately doesn't build one), look at Auth0's newer **My Account API** — designed
-specifically for a backend-less SPA like this one, but currently **Limited Early Access**; you'll
-need to request it from your Auth0 account team before it's available on your tenant.
+app deliberately doesn't build one), look at Auth0's **My Account API**, designed
+specifically for a backend-less SPA like this one.
 
 ## Test vs. production
 

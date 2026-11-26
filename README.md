@@ -73,7 +73,7 @@ Vercel dashboard's own environment variables instead.
 
 > [!NOTE]
 > Some npm 10.x versions crash on `npm install` with `Cannot read properties of null (reading
-> 'edgesOut')` while resolving Vitest's own optional peer dependencies — a known, still-open npm
+> 'edgesOut')` while resolving Vitest's own optional peer dependencies — a known npm
 > bug ([npm/cli issue 9787](https://github.com/npm/cli/issues/9787)), not a real conflict in this
 > app's dependencies. If you hit it, `npm install --legacy-peer-deps` installs cleanly.
 
